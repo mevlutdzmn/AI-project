@@ -1,0 +1,1 @@
+This folder is reserved for message-related providers (repositories, mappers).

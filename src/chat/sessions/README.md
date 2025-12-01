@@ -1,0 +1,1 @@
+This folder is reserved for session-related providers (repositories, mappers).
