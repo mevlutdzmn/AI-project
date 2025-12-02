@@ -6,13 +6,23 @@ import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(private configService: ConfigService) {
-    const backendUrl = configService.get<string>('BACKEND_URL') || 'http://localhost:4001/api/v1';
+    // Detect environment: Vercel production vs local development
+    const isVercel = process.env.VERCEL === '1';
+    
+    // Use production URL on Vercel, otherwise use environment variable or fallback to localhost
+    const backendUrl = isVercel 
+      ? 'https://nestjs-back-kohl.vercel.app/api/v1'
+      : (configService.get<string>('BACKEND_URL') || 'http://localhost:4001/api/v1');
+    
     const callbackURL = `${backendUrl}/auth/google/callback`;
     
+    // Debug logging to verify configuration
     console.log('🔍 Google OAuth Config:', {
+      environment: isVercel ? 'Vercel Production' : 'Local/Other',
       backendUrl,
       callbackURL,
       clientID: configService.get<string>('GOOGLE_CLIENT_ID')?.substring(0, 20) + '...',
+      vercelEnv: process.env.VERCEL,
     });
     
     super({
