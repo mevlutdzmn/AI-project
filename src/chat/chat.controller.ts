@@ -39,6 +39,34 @@ export class ChatController {
         return this.chatService.createSession(req.user.id, body.title);
     }
 
+    @Post('start')
+    @ApiOperation({ summary: 'Start new chat with first message' })
+    @ApiResponse({ status: 201, description: 'Chat started successfully' })
+    async startChat(
+        @Req() req,
+        @Body() body: { message: string; model?: string; mode?: string },
+    ) {
+        const { message, model, mode } = body;
+        const userId = req.user.id;
+
+        // Create session
+        const session = await this.chatService.createSession(userId, 'New Chat');
+
+        // Send first message
+        const response = await this.chatService.sendMessage(
+            session.id,
+            userId,
+            message,
+            model,
+            mode,
+        );
+
+        return {
+            sessionId: session.id,
+            response,
+        };
+    }
+
     @Get('sessions')
     @SkipThrottle()
     @ApiOperation({ summary: 'Get all user chat sessions' })
