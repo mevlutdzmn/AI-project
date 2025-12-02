@@ -491,7 +491,12 @@ export class ChatService {
     }
 
     private async ensureSessionOwnership(sessionId: string, userId: number) {
-        console.log(`[ensureSessionOwnership] Checking session ${sessionId} for user ${userId}...`);
+        // Debug logları sadece development'ta göster
+        const isVerbose = process.env.DEBUG_SESSIONS === 'true';
+        
+        if (isVerbose) {
+            console.log(`[ensureSessionOwnership] Checking session ${sessionId} for user ${userId}...`);
+        }
         
         const [session] = await this.db
             .select({
@@ -506,7 +511,9 @@ export class ChatService {
             throw new Error('Session not found or unauthorized');
         }
 
-        console.log(`[ensureSessionOwnership] Found session ${sessionId}, owner: ${session.ownerId}, requesting user: ${userId}`);
+        if (isVerbose) {
+            console.log(`[ensureSessionOwnership] Found session ${sessionId}, owner: ${session.ownerId}, requesting user: ${userId}`);
+        }
 
         // Normalize both to numbers for comparison (handle potential type mismatches)
         const normalizedOwnerId = typeof session.ownerId === 'string' ? parseInt(session.ownerId, 10) : session.ownerId;
@@ -516,8 +523,10 @@ export class ChatService {
             console.error(`[ensureSessionOwnership] ❌ User ${normalizedUserId} doesn't own session ${sessionId} (owner: ${normalizedOwnerId})`);
             throw new Error('Session not found or unauthorized');
         }
-
-        console.log(`[ensureSessionOwnership] ✅ Ownership verified`);
+        
+        if (isVerbose) {
+            console.log(`[ensureSessionOwnership] ✅ Ownership verified`);
+        }
     }
 
     private async touchSession(sessionId: string) {
@@ -660,7 +669,10 @@ export class ChatService {
 
         const PREMIUM_MODES = ['image', 'web'];
 
-        if (PREMIUM_MODELS.includes(model)) {
+        // Localhost/development için premium kontrolünü atla
+        const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.VERCEL;
+
+        if (!isDevelopment && PREMIUM_MODELS.includes(model)) {
             if (
                 !user.subscriptionExpiresAt ||
                 new Date(user.subscriptionExpiresAt) < new Date()
@@ -671,7 +683,7 @@ export class ChatService {
             }
         }
 
-        if (mode && PREMIUM_MODES.includes(mode)) {
+        if (!isDevelopment && mode && PREMIUM_MODES.includes(mode)) {
             if (
                 !user.subscriptionExpiresAt ||
                 new Date(user.subscriptionExpiresAt) < new Date()
