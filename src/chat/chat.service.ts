@@ -10,6 +10,8 @@ import { SearchAdapter } from '../ai/adapters/search.adapter';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 
+// PDF parse için dynamic import kullanacağız
+
 const IMAGE_KEYWORDS = [
     'görsel',
     'resim',
@@ -42,12 +44,14 @@ export class ChatService {
     ) { }
 
     private isImageRequest(message: any): boolean {
-        if (typeof message === 'string') {
-            const lowerMessage = message.toLowerCase();
-            return IMAGE_KEYWORDS.some((keyword) => lowerMessage.includes(keyword));
-        }
-
+        // If message contains an uploaded image, this is NOT an image generation request
+        // It's an image ANALYSIS request - should go to GPT Vision, not DALL-E
         if (Array.isArray(message)) {
+            const hasUploadedImage = message.some((part: any) => part.type === 'image_url');
+            if (hasUploadedImage) {
+                return false; // Send to GPT Vision for analysis, not DALL-E
+            }
+            
             const textParts = message
                 .filter((part: any) => part.type === 'text')
                 .map((part: any) => part.text || '')
@@ -56,7 +60,82 @@ export class ChatService {
             return IMAGE_KEYWORDS.some((keyword) => lowerMessage.includes(keyword));
         }
 
+        if (typeof message === 'string') {
+            const lowerMessage = message.toLowerCase();
+            return IMAGE_KEYWORDS.some((keyword) => lowerMessage.includes(keyword));
+        }
+
         return false;
+    }
+
+    // PDF'den metin çıkarma
+    private async extractPdfText(base64Data: string): Promise<string> {
+        try {
+            // data:application/pdf;base64, kısmını kaldır
+            const base64Clean = base64Data.replace(/^data:application\/pdf;base64,/, '');
+            const buffer = Buffer.from(base64Clean, 'base64');
+            
+            // pdf-parse v1.x - simple function call
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const pdfParse = require('pdf-parse');
+            const data = await pdfParse(buffer);
+            this.logger.log(`[PDF] Extracted ${data.text.length} characters from PDF`);
+            return data.text;
+        } catch (error) {
+            this.logger.error('[PDF] Error extracting text:', error);
+            return '[PDF içeriği okunamadı]';
+        }
+    }
+
+    // Mesajda PDF var mı kontrol et ve işle
+    private async processMessageContent(message: any): Promise<string | any[]> {
+        this.logger.log(`[processMessageContent] Input type: ${typeof message}, isArray: ${Array.isArray(message)}`);
+        
+        if (typeof message === 'string') {
+            return message;
+        }
+
+        if (Array.isArray(message)) {
+            this.logger.log(`[processMessageContent] Array length: ${message.length}`);
+            const processedParts: any[] = [];
+            let pdfText = '';
+
+            for (const part of message) {
+                this.logger.log(`[processMessageContent] Processing part type: ${part.type}`);
+                
+                if (part.type === 'pdf' && part.pdf_data?.url) {
+                    // PDF'den metin çıkar
+                    this.logger.log(`[processMessageContent] Found PDF: ${part.pdf_data.name}`);
+                    const extractedText = await this.extractPdfText(part.pdf_data.url);
+                    this.logger.log(`[processMessageContent] PDF extracted text length: ${extractedText.length}`);
+                    pdfText = `\n\n[PDF Dosyası: ${part.pdf_data.name || 'document.pdf'}]\n\`\`\`\n${extractedText}\n\`\`\``;
+                } else if (part.type === 'text') {
+                    processedParts.push(part);
+                } else if (part.type === 'image_url') {
+                    processedParts.push(part);
+                }
+            }
+
+            // Eğer PDF varsa, text'e ekle
+            if (pdfText) {
+                const textPart = processedParts.find(p => p.type === 'text');
+                if (textPart) {
+                    textPart.text = (textPart.text || '') + pdfText;
+                } else {
+                    processedParts.unshift({ type: 'text', text: pdfText });
+                }
+            }
+
+            // Sadece image_url varsa array döndür, yoksa string
+            const hasImage = processedParts.some(p => p.type === 'image_url');
+            if (hasImage) {
+                return processedParts;
+            } else {
+                return processedParts.map(p => p.text || '').join('');
+            }
+        }
+
+        return message;
     }
 
     async createSession(userId: number, title?: string) {
@@ -135,12 +214,21 @@ export class ChatService {
             throw new Error('Message content cannot be empty');
         }
 
+        // Log incoming message type for debugging
+        this.logger.log(`[sendMessage] Message type: ${typeof userMessage}, isArray: ${Array.isArray(userMessage)}`);
+        if (Array.isArray(userMessage)) {
+            this.logger.log(`[sendMessage] Message parts: ${JSON.stringify(userMessage.map(p => ({ type: p.type, hasImageUrl: !!p.image_url })))}`);
+        }
+
+        // Serialize array messages as JSON for database storage
+        const contentToStore = Array.isArray(userMessage) ? JSON.stringify(userMessage) : userMessage;
+
         const [userMsg] = await this.db
             .insert(messages)
             .values({
                 sessionId,
                 role: 'user',
-                content: userMessage,
+                content: contentToStore,
                 model: model,
             })
             .returning();
@@ -313,26 +401,39 @@ export class ChatService {
             throw new Error('Message content cannot be empty');
         }
 
+        // Log incoming message type for debugging
+        this.logger.log(`[sendMessageStream] Message type: ${typeof userMessage}, isArray: ${Array.isArray(userMessage)}`);
+        if (Array.isArray(userMessage)) {
+            this.logger.log(`[sendMessageStream] Message parts: ${JSON.stringify(userMessage.map(p => ({ type: p.type, hasImageUrl: !!p.image_url, hasPdf: !!p.pdf_data })))}`);
+        }
+
+        // PDF ve diğer dosyaları işle
+        const processedMessage = await this.processMessageContent(userMessage);
+        this.logger.log(`[sendMessageStream] Processed message type: ${typeof processedMessage}, isArray: ${Array.isArray(processedMessage)}`);
+
+        // Serialize array messages as JSON for database storage
+        const contentToStore = Array.isArray(processedMessage) ? JSON.stringify(processedMessage) : processedMessage;
+
         const [userMsg] = await this.db
             .insert(messages)
             .values({
                 sessionId,
                 role: 'user',
-                content: userMessage,
+                content: contentToStore,
             })
             .returning();
 
         let messageText = '';
-        if (typeof userMessage === 'string') {
-            messageText = userMessage;
-        } else if (Array.isArray(userMessage)) {
-            messageText = userMessage
+        if (typeof processedMessage === 'string') {
+            messageText = processedMessage;
+        } else if (Array.isArray(processedMessage)) {
+            messageText = processedMessage
                 .filter((part: any) => part.type === 'text')
                 .map((part: any) => part.text || '')
                 .join(' ');
         }
 
-        if (mode === 'image' || this.isImageRequest(userMessage)) {
+        if (mode === 'image' || this.isImageRequest(processedMessage)) {
             const imageResponse = await this.handleImageRequest(
                 sessionId,
                 messageText || 'Generate an image',

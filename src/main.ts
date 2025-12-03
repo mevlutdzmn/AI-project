@@ -15,7 +15,7 @@ async function bootstrap() {
   app.setGlobalPrefix(prefix);
 
   app.use(`/${prefix}/payments/webhook`, raw({ type: 'application/json' }));
-  app.use(json({ limit: '1mb' }));
+  app.use(json({ limit: '50mb' }));
 
   // Serve static files for local development only
   if (!process.env.VERCEL) {
