@@ -4,6 +4,23 @@ import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { SCHEMAS, type SchemaName } from '../schemas/structured';
 
+// ChatGPT tarzı system prompt - doğal ve samimi konuşma
+const CHATGPT_SYSTEM_PROMPT = `You are ChatGPT, a highly capable large language model built by OpenAI.
+Your tone must be friendly, conversational, natural and helpful.
+
+Rules:
+- Answer like ChatGPT website.
+- Use simple natural language.
+- Add light emojis when appropriate 😊
+- Be short and warm in greetings.
+- Never mention you are an AI unless directly asked.
+- Always try to be helpful and positive.
+- Match the user's language - if they write in Persian/Farsi, respond in Persian/Farsi.
+- If they write in Turkish, respond in Turkish.
+- If they write in English, respond in English.
+- Keep responses concise but complete.
+- Use a conversational tone, like chatting with a friend.`;
+
 export interface MessageContentPart {
     type: 'text' | 'image_url' | 'file_url';
     text?: string;
@@ -71,6 +88,12 @@ export class OpenAIAdapter {
                 return { role: msg.role, content: String(msg.content) };
             });
 
+            // System prompt'u başa ekle
+            const messagesWithSystem = [
+                { role: 'system' as const, content: CHATGPT_SYSTEM_PROMPT },
+                ...openAIMessages,
+            ];
+
             if (model.startsWith('gpt-5')) {
                 // For GPT-5, use Responses API
                 return await this.chatGPT5(messages, model, mode);
@@ -78,8 +101,12 @@ export class OpenAIAdapter {
 
             const response = await (this.client as any).chat.completions.create({
                 model: model,
-                messages: openAIMessages,
+                messages: messagesWithSystem,
                 max_tokens: 4096,
+                temperature: 0.7,
+                top_p: 1,
+                presence_penalty: 0.1,
+                frequency_penalty: 0.1,
             });
 
             return response.choices[0].message.content || '';
@@ -133,12 +160,22 @@ export class OpenAIAdapter {
                 return { role: msg.role, content: String(msg.content) };
             });
 
+            // System prompt'u başa ekle
+            const messagesWithSystem = [
+                { role: 'system' as const, content: CHATGPT_SYSTEM_PROMPT },
+                ...openAIMessages,
+            ];
+
             // Use any to bypass strict type checking for now as we manually constructed valid messages
             const stream = await (this.client as any).chat.completions.create({
                 model: model,
-                messages: openAIMessages,
+                messages: messagesWithSystem,
                 stream: true,
                 max_tokens: 4096,
+                temperature: 0.7,
+                top_p: 1,
+                presence_penalty: 0.1,
+                frequency_penalty: 0.1,
             });
 
             let chunkCount = 0;
@@ -230,8 +267,14 @@ export class OpenAIAdapter {
             throw new Error('OpenAI client not initialized');
         }
 
+        // System prompt'u başa ekle
+        const messagesWithSystem: ChatMessage[] = [
+            { role: 'system', content: CHATGPT_SYSTEM_PROMPT },
+            ...messages,
+        ];
+
         // Convert messages to Responses API format
-        const inputMessages = messages.map((msg) => {
+        const inputMessages = messagesWithSystem.map((msg) => {
             // Handle string content
             if (typeof msg.content === 'string') {
                 return {
