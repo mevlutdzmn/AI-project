@@ -46,6 +46,22 @@ export class EmailService {
     return true;
   }
 
+  async sendPasswordResetEmail(email: string, resetLink: string): Promise<boolean> {
+    if (!this.transporter) {
+      this.logger.log(`[DEV] Password reset link for ${email}: ${resetLink}`);
+      return false;
+    }
+
+    const emailUser = this.configService.get<string>('EMAIL_USER');
+    await this.transporter.sendMail({
+      from: `"AI Platform" <${emailUser}>`,
+      to: email,
+      subject: 'بازیابی رمز عبور',
+      html: this.getPasswordResetEmailTemplate(resetLink),
+    });
+    return true;
+  }
+
   async sendWelcomeEmail(email: string): Promise<void> {
     if (!this.transporter) {
       this.logger.log(`[DEV] Welcome email would be sent to: ${email}`);
@@ -151,6 +167,119 @@ export class EmailService {
             </div>
             <div class="footer">
               <p>If you did not request this email, you can safely ignore it.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
+  private getPasswordResetEmailTemplate(resetLink: string): string {
+    return `
+      <!DOCTYPE html>
+      <html dir="rtl">
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Tahoma', sans-serif;
+              background-color: #0a0a0a;
+              color: #ffffff;
+              margin: 0;
+              padding: 40px 20px;
+              direction: rtl;
+            }
+            .container {
+              max-width: 600px;
+              margin: 0 auto;
+              background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+              border-radius: 16px;
+              padding: 40px;
+              border: 1px solid #2a2a3e;
+            }
+            .logo {
+              text-align: center;
+              font-size: 32px;
+              font-weight: bold;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+              margin-bottom: 30px;
+            }
+            h1 {
+              color: #ffffff;
+              font-size: 24px;
+              margin-bottom: 20px;
+              text-align: center;
+            }
+            p {
+              color: #b4b4b4;
+              font-size: 16px;
+              line-height: 1.8;
+              margin-bottom: 20px;
+              text-align: center;
+            }
+            .button-container {
+              text-align: center;
+              margin: 30px 0;
+            }
+            .reset-button {
+              display: inline-block;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: #ffffff !important;
+              text-decoration: none;
+              padding: 15px 40px;
+              border-radius: 12px;
+              font-size: 18px;
+              font-weight: bold;
+            }
+            .footer {
+              text-align: center;
+              color: #666;
+              font-size: 14px;
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 1px solid #2a2a3e;
+            }
+            .warning {
+              background: #2a1a1a;
+              border-right: 4px solid #ff6b6b;
+              padding: 15px;
+              margin-top: 20px;
+              border-radius: 4px;
+              font-size: 14px;
+              color: #ffcccc;
+              text-align: right;
+            }
+            .expire-note {
+              background: #1a2a1a;
+              border-right: 4px solid #4CAF50;
+              padding: 15px;
+              margin-top: 20px;
+              border-radius: 4px;
+              font-size: 14px;
+              color: #a5d6a7;
+              text-align: right;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="logo">AI Platform</div>
+            <h1>بازیابی رمز عبور</h1>
+            <p>درخواست بازیابی رمز عبور برای حساب شما دریافت شد.</p>
+            <p>برای تغییر رمز عبور خود، روی دکمه زیر کلیک کنید:</p>
+            <div class="button-container">
+              <a href="${resetLink}" class="reset-button">تغییر رمز عبور</a>
+            </div>
+            <div class="expire-note">
+              این لینک تا <strong>۱ ساعت</strong> معتبر است.
+            </div>
+            <div class="warning">
+              <strong>هشدار امنیتی:</strong> اگر شما این درخواست را نداده‌اید، این ایمیل را نادیده بگیرید.
+            </div>
+            <div class="footer">
+              <p>در صورت بروز مشکل، با پشتیبانی تماس بگیرید.</p>
             </div>
           </div>
         </body>

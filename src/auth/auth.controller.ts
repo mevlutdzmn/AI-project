@@ -12,7 +12,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
-import { RegisterDto, LoginDto, VerifyEmailDto, ResendCodeDto } from './dto';
+import { RegisterDto, LoginDto, VerifyEmailDto, ResendCodeDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import type { Response } from 'express';
 
 @ApiTags('Authentication')
@@ -32,6 +32,20 @@ export class AuthController {
     @ApiResponse({ status: 200, description: 'Login successful' })
     async login(@Body() body: LoginDto) {
         return this.authService.login(body.email, body.password);
+    }
+
+    @Post('forgot-password')
+    @ApiOperation({ summary: 'Request password reset' })
+    @ApiResponse({ status: 200, description: 'Reset email sent if user exists' })
+    async forgotPassword(@Body() body: ForgotPasswordDto) {
+        return this.authService.forgotPassword(body.email);
+    }
+
+    @Post('reset-password')
+    @ApiOperation({ summary: 'Reset password with token' })
+    @ApiResponse({ status: 200, description: 'Password reset successful' })
+    async resetPassword(@Body() body: ResetPasswordDto) {
+        return this.authService.resetPassword(body.token, body.newPassword);
     }
 
     @Post('verify-email')

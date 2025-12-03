@@ -9,6 +9,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../database/schema';
 import { pending_users, users } from '../database/schema';
 import { eq } from 'drizzle-orm';
+import * as crypto from 'crypto';
 
 const VERIFICATION_WINDOW_MINUTES = 15;
 
@@ -281,6 +282,85 @@ export class AuthService {
                 'Password must contain at least one special character (!@#$%^&*...)',
             );
         }
+    }
+
+    async forgotPassword(email: string) {
+        const user = await this.userService.findByEmail(email);
+        
+        // Always return success to prevent email enumeration
+        if (!user) {
+            return {
+                success: true,
+                message: 'اگر این ایمیل در سیستم وجود داشته باشد، لینک بازیابی رمز عبور ارسال خواهد شد.',
+            };
+        }
+
+        // Generate secure random token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        // Save token to database
+        await this.db
+            .update(users)
+            .set({ 
+                resetToken, 
+                resetTokenExpiry 
+            })
+            .where(eq(users.id, user.id));
+
+        // Send reset email
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+        
+        await this.mailService.sendPasswordResetEmail(email, resetLink);
+
+        return {
+            success: true,
+            message: 'اگر این ایمیل در سیستم وجود داشته باشد، لینک بازیابی رمز عبور ارسال خواهد شد.',
+        };
+    }
+
+    async resetPassword(token: string, newPassword: string) {
+        // Find user by reset token
+        const [user] = await this.db
+            .select()
+            .from(users)
+            .where(eq(users.resetToken, token));
+
+        if (!user) {
+            throw new Error('لینک بازیابی نامعتبر یا منقضی شده است.');
+        }
+
+        // Check if token is expired
+        if (user.resetTokenExpiry && new Date() > new Date(user.resetTokenExpiry)) {
+            // Clear expired token
+            await this.db
+                .update(users)
+                .set({ resetToken: null, resetTokenExpiry: null })
+                .where(eq(users.id, user.id));
+            throw new Error('لینک بازیابی منقضی شده است. لطفاً مجدداً درخواست دهید.');
+        }
+
+        // Validate new password
+        this.validatePassword(newPassword);
+
+        // Hash new password
+        const hashedPassword = await PasswordHasher.hash(newPassword);
+
+        // Update password and clear reset token
+        await this.db
+            .update(users)
+            .set({ 
+                password: hashedPassword,
+                resetToken: null, 
+                resetTokenExpiry: null 
+            })
+            .where(eq(users.id, user.id));
+
+        return {
+            success: true,
+            message: 'رمز عبور شما با موفقیت تغییر یافت. اکنون می‌توانید وارد شوید.',
+        };
     }
 
     async handleGoogleLogin(googleUser: any) {

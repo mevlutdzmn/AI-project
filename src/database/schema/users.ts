@@ -19,5 +19,7 @@ export const users = pgTable("users", {
   imageCredits: integer("image_credits").default(0),  // Free users can only generate 1 image
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
   isAdmin: boolean("is_admin").default(false).notNull(),
+  resetToken: text("reset_token"),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
