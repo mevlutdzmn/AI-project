@@ -111,10 +111,15 @@ export class ChatController {
         const { sessionId, message, model, mode } = body;
         const userId = req.user.id;
 
+        // ✅ Optimized SSE headers for instant streaming
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
+        res.setHeader('Transfer-Encoding', 'chunked');
+        
+        // ✅ Flush headers immediately to start connection
+        res.flushHeaders();
 
         try {
             const result = await this.chatService.sendMessageStream(
@@ -123,6 +128,10 @@ export class ChatController {
                 message,
                 (chunk: string) => {
                     res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+                    // ✅ Force flush each chunk immediately
+                    if (typeof (res as any).flush === 'function') {
+                        (res as any).flush();
+                    }
                 },
                 model,
                 mode,

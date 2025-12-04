@@ -423,6 +423,9 @@ export class ChatService {
             })
             .returning();
 
+        // ✅ İlk mesajda session title'ını otomatik güncelle
+        this.autoUpdateSessionTitle(sessionId, processedMessage);
+
         let messageText = '';
         if (typeof processedMessage === 'string') {
             messageText = processedMessage;
@@ -589,6 +592,55 @@ export class ChatService {
             .where(eq(sessions.id, sessionId));
 
         return updated;
+    }
+
+    // ✅ Otomatik session title güncelleme (ilk user mesajından)
+    private async autoUpdateSessionTitle(sessionId: string, messageContent: any) {
+        try {
+            // Session'ın mevcut title'ını kontrol et
+            const [session] = await this.db
+                .select()
+                .from(sessions)
+                .where(eq(sessions.id, sessionId));
+            
+            if (!session) return;
+            
+            // Eğer title zaten özelleştirilmişse (default değilse) güncelleme
+            const defaultTitles = ['New Chat', 'Yeni Sohbet', ''];
+            if (session.title && !defaultTitles.includes(session.title.trim())) {
+                return; // Zaten özel bir title var
+            }
+            
+            // Mesaj sayısını kontrol et - sadece ilk mesajda güncelle
+            const messageCount = await this.db
+                .select()
+                .from(messages)
+                .where(eq(messages.sessionId, sessionId));
+            
+            if (messageCount.length > 2) return; // İlk mesaj değil
+            
+            // Title oluştur
+            let titleText = '';
+            if (typeof messageContent === 'string') {
+                titleText = messageContent;
+            } else if (Array.isArray(messageContent)) {
+                const textPart = messageContent.find((p: any) => p.type === 'text');
+                titleText = textPart?.text || 'Image';
+            }
+            
+            // Title'ı kısalt
+            const newTitle = titleText.substring(0, 30) + (titleText.length > 30 ? '...' : '');
+            
+            // Güncelle
+            await this.db
+                .update(sessions)
+                .set({ title: newTitle })
+                .where(eq(sessions.id, sessionId));
+                
+        } catch (error) {
+            // Title güncellemesi kritik değil, hata olursa sessizce devam et
+            this.logger.warn(`[autoUpdateSessionTitle] Failed to update title: ${error}`);
+        }
     }
 
     private async ensureSessionOwnership(sessionId: string, userId: number) {

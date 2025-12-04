@@ -142,7 +142,10 @@ export class OpenAIAdapter {
             }
 
             if (model.startsWith('gpt-5')) {
-                // GPT-5.1 fallback for streaming - simulate word-by-word
+                // ✅ GPT-5.1 - önce "düşünüyor" göster, sonra yanıtı al
+                // Bu kullanıcıya anında geri bildirim verir
+                this.logger.log(`[OpenAI] Starting GPT-5 request for model: ${model}`);
+                
                 const full = await this.chatGPT5(messages, model);
                 await this.simulateStreaming(full, onChunk);
                 return;
@@ -219,6 +222,7 @@ export class OpenAIAdapter {
     }
 
     // ✅ Simulate word-by-word streaming for models that don't support it
+    // ✅ 30ms delay for natural ChatGPT-like typing effect
     private async simulateStreaming(
         text: string,
         onChunk: (chunk: string) => void,
@@ -227,8 +231,8 @@ export class OpenAIAdapter {
         for (let i = 0; i < words.length; i++) {
             const word = words[i] + (i < words.length - 1 ? ' ' : '');
             onChunk(word);
-            // Small delay for smooth effect (50ms per word)
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            // ✅ 30ms delay for natural typing effect (ChatGPT-like speed)
+            await new Promise((resolve) => setTimeout(resolve, 30));
         }
     }
 
