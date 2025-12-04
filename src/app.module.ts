@@ -13,6 +13,8 @@ import { AIModule } from './ai/ai.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AdminModule } from './admin/admin.module';
 import { FilesModule } from './files/files.module';
+import { MemoryModule } from './memory/memory.module';
+import { ShareModule } from './share/share.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import openaiConfig from './config/openai.config';
@@ -42,6 +44,8 @@ import { validationSchema } from './config/env.validation';
     PaymentsModule,
     AdminModule,
     FilesModule,
+    MemoryModule,
+    ShareModule,
   ],
   controllers: [AppController],
   providers: [

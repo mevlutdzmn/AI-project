@@ -4,3 +4,6 @@ export * from "./sessions";
 export * from "./messages";
 export * from "./payments";
 export * from "./auth_sessions";
+export * from "./user_memories";
+export * from "./custom_instructions";
+export * from "./shared_chats";

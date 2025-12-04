@@ -9,6 +9,7 @@ import { DalleAdapter } from '../ai/adapters/dalle.adapter';
 import { SearchAdapter } from '../ai/adapters/search.adapter';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
+import { MemoryService } from '../memory/memory.service';
 
 // PDF parse için dynamic import kullanacağız
 
@@ -41,6 +42,7 @@ export class ChatService {
         private search: SearchAdapter,
         private usersService: UsersService,
         private configService: ConfigService,
+        private memoryService: MemoryService,
     ) { }
 
     private isImageRequest(message: any): boolean {
