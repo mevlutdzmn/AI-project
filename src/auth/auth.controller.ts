@@ -73,7 +73,13 @@ export class AuthController {
     @ApiOperation({ summary: 'Get current user profile' })
     @ApiResponse({ status: 200, description: 'User profile' })
     getProfile(@Request() req) {
-        return req.user;
+        // ✅ Hassas bilgileri çıkar ve isPremium'u düzgün döndür
+        const { password, verificationCode, resetToken, resetTokenExpiry, ...safeUser } = req.user;
+        return {
+            ...safeUser,
+            isPremium: req.user.isPremium ?? false,
+            subscriptionEnd: req.user.subscriptionExpiresAt,
+        };
     }
 
     @Get('google')

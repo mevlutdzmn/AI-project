@@ -859,7 +859,7 @@ export class ChatService {
 
             if (
                 !session ||
-                (session.title !== 'New Chat' && session.title !== 'Yeni Sohbet')
+                (session.title !== 'New Chat' && session.title !== 'Yeni Sohbet' && session.title !== 'گفتگوی جدید')
             ) {
                 return;
             }
@@ -890,17 +890,61 @@ export class ChatService {
             const messageText =
                 typeof content === 'string' ? content : JSON.stringify(content);
 
-            let title = messageText.substring(0, 50);
-            if (messageText.length > 50) {
-                title = title.substring(0, title.lastIndexOf(' ')) + '...';
+            // ✅ ChatGPT tarzı AI ile başlık üret
+            let title = await this.generateTitleWithAI(messageText);
+            
+            // AI başarısız olursa fallback
+            if (!title || title.length < 2) {
+                title = messageText.substring(0, 50);
+                if (messageText.length > 50) {
+                    title = title.substring(0, title.lastIndexOf(' ')) || title;
+                    title += '...';
+                }
             }
 
             await this.db
                 .update(sessions)
                 .set({ title })
                 .where(eq(sessions.id, sessionId));
+                
+            this.logger.log(`[AutoTitle] Session ${sessionId}: "${title}"`);
         } catch (error) {
             this.logger.error('Auto title generation failed:', error);
+        }
+    }
+
+    // ✅ ChatGPT tarzı AI ile başlık üretme
+    private async generateTitleWithAI(userMessage: string): Promise<string> {
+        try {
+            // ChatGPT'nin kullandığı basit prompt
+            const prompt = `Generate a short title (2-5 words max) for this conversation. 
+Rules:
+- Use the same language as the user's message
+- No quotes, no punctuation at the end
+- Just output the title, nothing else
+
+User message: "${userMessage.substring(0, 200)}"`;
+
+            const response = await this.openai.chat(
+                [{ role: 'user', content: prompt }],
+                'gpt-4o-mini',
+            );
+
+            let title = (response || '').trim()
+                .replace(/^["']|["']$/g, '')  // Tırnak kaldır
+                .replace(/\.+$/, '')           // Sondaki nokta kaldır
+                .replace(/^Title:\s*/i, '')    // "Title:" prefix kaldır
+                .trim();
+
+            // Max 50 karakter
+            if (title.length > 50) {
+                title = title.substring(0, 47) + '...';
+            }
+
+            return title;
+        } catch (error) {
+            this.logger.error('[generateTitleWithAI] Error:', error.message);
+            return '';
         }
     }
 
