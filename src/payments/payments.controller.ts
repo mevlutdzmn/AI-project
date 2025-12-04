@@ -72,11 +72,34 @@ export class PaymentsController {
     @UseGuards(AuthGuard('jwt'))
     @Get('status')
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Check user premium status' })
-    @ApiResponse({ status: 200, description: 'Returns premium status' })
+    @ApiOperation({ summary: 'Check user subscription status' })
+    @ApiResponse({ status: 200, description: 'Returns subscription status' })
     async getStatus(@Req() req) {
-        const isPremium = await this.paymentsService.checkPremiumStatus(req.user.id);
-        return { isPremium };
+        const user = await this.db.query.users.findFirst({
+            where: eq(users.id, req.user.id),
+            columns: {
+                isPremium: true,
+                subscriptionExpiresAt: true,
+                active: true,
+            },
+        });
+
+        if (!user) {
+            return { active: false, daysRemaining: 0 };
+        }
+
+        const now = new Date();
+        const expiresAt = user.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) : null;
+        const isActive = user.isPremium && expiresAt && expiresAt > now;
+        const daysRemaining = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+
+        return {
+            active: isActive,
+            subscriptionExpiresAt: user.subscriptionExpiresAt,
+            daysRemaining,
+            plan: 'monthly',
+            amount: 199000,
+        };
     }
 
     @Post('initiate')

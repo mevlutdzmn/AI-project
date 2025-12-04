@@ -16,7 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ShareService } from './share.service';
 
 @ApiTags('Share & Export')
-@Controller('api/v1/chat')
+@Controller('chat')
 export class ShareController {
   constructor(private shareService: ShareService) {}
 

@@ -14,7 +14,7 @@ import { MemoryService } from './memory.service';
 
 @ApiTags('Memory')
 @ApiBearerAuth()
-@Controller('api/v1/memory')
+@Controller('memory')
 @UseGuards(JwtAuthGuard)
 export class MemoryController {
   constructor(private memoryService: MemoryService) {}

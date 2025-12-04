@@ -1,13 +1,14 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { DRIZZLE } from '../database/drizzle.provider';
 import * as schema from '../database/schema';
 
 @Injectable()
 export class MemoryService {
   constructor(
-    @Inject('DATABASE_CONNECTION')
-    private db: NodePgDatabase<typeof schema>,
+    @Inject(DRIZZLE)
+    private db: PostgresJsDatabase<typeof schema>,
   ) {}
 
   // ✅ Get all memories for user

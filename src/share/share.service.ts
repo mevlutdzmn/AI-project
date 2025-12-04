@@ -1,14 +1,15 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { randomBytes } from 'crypto';
+import { DRIZZLE } from '../database/drizzle.provider';
 import * as schema from '../database/schema';
 
 @Injectable()
 export class ShareService {
   constructor(
-    @Inject('DATABASE_CONNECTION')
-    private db: NodePgDatabase<typeof schema>,
+    @Inject(DRIZZLE)
+    private db: PostgresJsDatabase<typeof schema>,
   ) {}
 
   // ✅ Create share link

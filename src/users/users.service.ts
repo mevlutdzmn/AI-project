@@ -69,11 +69,39 @@ export class UsersService {
                 email: users.email,
                 verified: users.verified,
                 active: users.active,
+                isPremium: users.isPremium,
                 subscriptionExpiresAt: users.subscriptionExpiresAt,
             })
             .from(users)
             .where(eq(users.id, userId));
 
         return updatedUser;
+    }
+
+    async findByIdWithPassword(id: number) {
+        const [user] = await this.db
+            .select({
+                id: users.id,
+                email: users.email,
+                password: users.password,
+            })
+            .from(users)
+            .where(eq(users.id, id));
+        return user ?? null;
+    }
+
+    async updatePassword(userId: number, hashedPassword: string) {
+        await this.db
+            .update(users)
+            .set({ password: hashedPassword })
+            .where(eq(users.id, userId));
+    }
+
+    async deleteUser(userId: number) {
+        // First delete related data (sessions, messages, etc.)
+        // For now, just mark as inactive or delete the user
+        await this.db
+            .delete(users)
+            .where(eq(users.id, userId));
     }
 }
