@@ -333,9 +333,9 @@ export class OpenAIAdapter {
             `[GPT-5] Model: ${baseModel}, Reasoning Effort: ${effort}, Original Model ID: ${model}, Mode: ${mode}`,
         );
 
+        // Build base request params
         const requestParams: any = {
             model: baseModel,
-            input: inputMessages,
         };
 
         // Add reasoning effort if applicable
@@ -360,7 +360,6 @@ export class OpenAIAdapter {
                 ...(requestParams.tools || []),
                 { type: 'web_search' },
             ];
-            // Let the model auto-select tools; do not force tool_choice to keep compatibility
         }
 
         // Add previous_response_id for conversation continuity
@@ -368,30 +367,98 @@ export class OpenAIAdapter {
             requestParams.previous_response_id = this.lastResponseId;
         }
 
-        const response = await (this.client as any).responses.create(requestParams);
+        // System/developer message is always first; the rest is conversation history
+        const systemMsg = inputMessages[0];
+        const convMessages = inputMessages.slice(1);
 
-        // Store response ID for next turn
-        this.lastResponseId = response.id;
+        // Truncation attempts: keep last N conversation messages on each retry
+        const truncationAttempts = [100, 50, 30, 20, 12, 8, 4, 2];
+        let lastError: any = null;
 
-        // Check if response contains image generation
-        const imageGenerationCalls = response.output.filter(
-            (o: any) => o.type === 'image_generation_call',
-        );
+        for (const keep of truncationAttempts) {
+            try {
+                const toSend = [systemMsg, ...convMessages.slice(-keep)];
+                requestParams.input = toSend;
 
-        if (imageGenerationCalls.length > 0 && imageGenerationCalls[0].result) {
-            // Return image as base64 markdown
-            const imageBase64 = imageGenerationCalls[0].result;
-            const revisedPrompt = imageGenerationCalls[0].revised_prompt || '';
+                this.logger.log(
+                    `[GPT-5] Attempting Responses.create with last ${Math.min(keep, convMessages.length)} conv messages (total items: ${toSend.length})`,
+                );
 
-            this.logger.log(
-                `[GPT-5 Image] Generated image with revised prompt: ${revisedPrompt}`,
-            );
+                const response = await (this.client as any).responses.create(requestParams);
 
-            // Return markdown image with base64 data
-            return `![Generated Image](data:image/png;base64,${imageBase64})`;
+                // Store response ID for next turn
+                this.lastResponseId = response.id;
+
+                // Check for image generation
+                const imageGenerationCalls = (response.output || []).filter(
+                    (o: any) => o.type === 'image_generation_call',
+                );
+
+                if (imageGenerationCalls.length > 0 && imageGenerationCalls[0].result) {
+                    const imageBase64 = imageGenerationCalls[0].result;
+                    const revisedPrompt = imageGenerationCalls[0].revised_prompt || '';
+
+                    this.logger.log(
+                        `[GPT-5 Image] Generated image with revised prompt: ${revisedPrompt}`,
+                    );
+
+                    return `![Generated Image](data:image/png;base64,${imageBase64})`;
+                }
+
+                return response.output_text || 'No response';
+            } catch (err: any) {
+                lastError = err;
+                const code = err?.code || err?.error?.code;
+                const message = String(err?.message || '');
+
+                // If context length exceeded, retry with smaller history
+                if (
+                    code === 'context_length_exceeded' ||
+                    /context window/i.test(message) ||
+                    /context_length_exceeded/i.test(message)
+                ) {
+                    this.logger.warn(
+                        `[GPT-5] context_length_exceeded with keep=${keep}. Retrying with less history...`,
+                    );
+                    continue;
+                }
+
+                // For other errors, throw immediately
+                this.logger.error('[GPT-5] Responses API error (non-context):', err);
+                throw err;
+            }
         }
 
-        return response.output_text || 'No response';
+        // Last resort: send only system + the very last message
+        try {
+            const minimal = [systemMsg, convMessages[convMessages.length - 1]].filter(Boolean);
+            requestParams.input = minimal;
+            this.logger.warn(
+                `[GPT-5] All truncation attempts failed. Sending minimal context (items: ${minimal.length})`,
+            );
+            const response = await (this.client as any).responses.create(requestParams);
+            this.lastResponseId = response.id;
+
+            const imageGenerationCalls = (response.output || []).filter(
+                (o: any) => o.type === 'image_generation_call',
+            );
+
+            if (imageGenerationCalls.length > 0 && imageGenerationCalls[0].result) {
+                const imageBase64 = imageGenerationCalls[0].result;
+                const revisedPrompt = imageGenerationCalls[0].revised_prompt || '';
+
+                this.logger.log(
+                    `[GPT-5 Image] Generated image with revised prompt: ${revisedPrompt}`,
+                );
+
+                return `![Generated Image](data:image/png;base64,${imageBase64})`;
+            }
+
+            return response.output_text || 'No response';
+        } catch (finalErr: any) {
+            this.logger.error('[GPT-5] Final minimal attempt also failed:', finalErr);
+            throw finalErr || lastError || new Error('GPT-5 Responses API failed after truncation');
+        }
     }
 
     // ------------------------------
