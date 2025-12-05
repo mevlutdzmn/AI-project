@@ -3,7 +3,7 @@ import { DRIZZLE } from '../database/drizzle.provider';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../database/schema';
 import { sessions, messages, users } from '../database/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { OpenAIAdapter, ChatMessage } from '../ai/adapters/openai.adapter';
 import { DalleAdapter } from '../ai/adapters/dalle.adapter';
 import { SearchAdapter } from '../ai/adapters/search.adapter';
@@ -172,7 +172,12 @@ export class ChatService {
         return this.db
             .select()
             .from(sessions)
-            .where(eq(sessions.userId, userId))
+            .where(
+                and(
+                    eq(sessions.userId, userId),
+                    eq(sessions.isDeleted, false)
+                )
+            )
             .orderBy(desc(sessions.updatedAt));
     }
 
@@ -574,8 +579,14 @@ export class ChatService {
     async deleteSession(sessionId: string, userId: number) {
         await this.ensureSessionOwnership(sessionId, userId);
 
-        await this.db.delete(messages).where(eq(messages.sessionId, sessionId));
-        await this.db.delete(sessions).where(eq(sessions.id, sessionId));
+        // Soft delete - veritabanından silme, sadece işaretle
+        await this.db
+            .update(sessions)
+            .set({ 
+                isDeleted: true, 
+                deletedAt: new Date() 
+            })
+            .where(eq(sessions.id, sessionId));
 
         return { success: true };
     }

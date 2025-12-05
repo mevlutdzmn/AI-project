@@ -1,4 +1,5 @@
 import {
+    boolean,
     integer,
     pgTable,
     text,
@@ -13,6 +14,8 @@ export const sessions = pgTable("sessions", {
         .notNull()
         .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull().default("New Chat"),
+    isDeleted: boolean("is_deleted").notNull().default(false),
+    deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
