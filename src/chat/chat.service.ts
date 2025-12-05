@@ -1262,10 +1262,19 @@ ${searchContext ? '5. **منابع** - لیست منابع استفاده شده
     ): Promise<{ sessionId: string; userMessageId: number; assistantMessageId?: number }> {
         this.logger.log(`[Agent Mode] Starting task execution for: ${task}`);
 
-        onChunk('🤖 **حالت ایجنت فعال شد**\n\n');
-        onChunk('📋 **در حال تحلیل وظیفه...**\n\n');
+        // Detect language from task
+        const isTurkish = /[ğüşıöçĞÜŞİÖÇ]/.test(task) || /\b(bir|ve|için|ile|bu|ne|nasıl|neden|kim|nerede|yap|et|ol|de|da)\b/i.test(task);
+        const isPersian = /[\u0600-\u06FF]/.test(task);
 
-        const agentPrompt = `شما یک ایجنت هوشمند هستید که می‌توانید وظایف پیچیده را به مراحل کوچک‌تر تقسیم کرده و آنها را اجرا کنید.
+        let activatedMsg: string;
+        let analyzingMsg: string;
+        let agentPrompt: string;
+
+        if (isPersian) {
+            // Farsça
+            activatedMsg = '🤖 **حالت ایجنت فعال شد**\n\n';
+            analyzingMsg = '📋 **در حال تحلیل وظیفه...**\n\n';
+            agentPrompt = `شما یک ایجنت هوشمند هستید که می‌توانید وظایف پیچیده را به مراحل کوچک‌تر تقسیم کرده و آنها را اجرا کنید.
 
 **وظیفه درخواستی:** ${task}
 
@@ -1292,7 +1301,75 @@ ${searchContext ? '5. **منابع** - لیست منابع استفاده شده
 خلاصه کار انجام شده و خروجی نهایی
 
 ---
-*توجه: من یک ایجنت AI هستم و فقط می‌توانم وظایف متنی و تحلیلی را انجام دهم. برای وظایف نیازمند دسترسی به سیستم‌های خارجی، لطفاً ابزارهای مناسب را فراهم کنید.*`;
+*توجه: من یک ایجنت AI هستم و فقط می‌توانم وظایف متنی و تحلیلی را انجام دهم.*`;
+        } else if (isTurkish) {
+            // Türkçe
+            activatedMsg = '🤖 **Agent Modu Aktif**\n\n';
+            analyzingMsg = '📋 **Görev analiz ediliyor...**\n\n';
+            agentPrompt = `Sen karmaşık görevleri küçük adımlara bölebilen ve bunları yürütebilen akıllı bir ajansın.
+
+**İstenen görev:** ${task}
+
+**Lütfen aşağıdaki yapıyla yanıt ver:**
+
+## 📌 Görev Analizi
+Görev ve hedefleri hakkında kısa açıklama
+
+## 📋 Yürütme Planı
+### Adım 1: [Başlık]
+- Uygulama detayları
+- Beklenen çıktı
+
+### Adım 2: [Başlık]
+- Uygulama detayları
+- Beklenen çıktı
+
+(ve devamı...)
+
+## ⚡ Adımların Yürütülmesi
+Görevin adım adım yürütülmesi ve açıklamalar
+
+## ✅ Sonuç
+Yapılan işin özeti ve nihai çıktı
+
+---
+*Not: Ben bir AI ajanıyım ve sadece metin tabanlı ve analitik görevleri yapabilirim.*`;
+        } else {
+            // İngilizce (varsayılan)
+            activatedMsg = '🤖 **Agent Mode Activated**\n\n';
+            analyzingMsg = '📋 **Analyzing task...**\n\n';
+            agentPrompt = `You are an intelligent agent that can break down complex tasks into smaller steps and execute them.
+
+**Requested task:** ${task}
+
+**Please respond with the following structure:**
+
+## 📌 Task Analysis
+Brief explanation of the task and its objectives
+
+## 📋 Execution Plan
+### Step 1: [Title]
+- Implementation details
+- Expected output
+
+### Step 2: [Title]
+- Implementation details
+- Expected output
+
+(and so on...)
+
+## ⚡ Step Execution
+Step-by-step execution of the task with explanations
+
+## ✅ Final Result
+Summary of the work done and final output
+
+---
+*Note: I am an AI agent and can only perform text-based and analytical tasks.*`;
+        }
+
+        onChunk(activatedMsg);
+        onChunk(analyzingMsg);
 
         const history = await this.getRecentMessages(sessionId);
         const chatMessages: ChatMessage[] = [
