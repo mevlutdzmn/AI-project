@@ -558,8 +558,11 @@ export class ChatService {
         }
 
         if (mode === 'web') {
+            this.logger.log(`[Web Mode] Starting web search for: ${messageText}`);
             const bingKey = this.configService.get<string>('BING_API_KEY');
+            
             if (bingKey) {
+                onChunk('🌐 **در حال جستجو در وب...**\n\n');
                 const searchResult = await this.search.search(messageText || '');
                 let responseText = '';
                 if (searchResult.type === 'results') {
@@ -581,7 +584,7 @@ export class ChatService {
                     .values({
                         sessionId,
                         role: 'assistant',
-                        content: responseText,
+                        content: '🌐 **در حال جستجو در وب...**\n\n' + responseText,
                         model: model,
                     })
                     .returning();
@@ -591,49 +594,58 @@ export class ChatService {
                     userMessageId: userMsg.id,
                     assistantMessageId: assistantMsg.id,
                 };
-            }
+            } else {
+                // Bing API key yok - AI ile web araması simüle et
+                onChunk('🌐 **حالت جستجوی وب فعال شد**\n\n');
+                onChunk('⚠️ *توجه: API جستجوی وب فعال نیست. در حال استفاده از دانش AI...*\n\n---\n\n');
+                
+                const webPrompt = `کاربر می‌خواهد در وب جستجو کند. سوال او: "${messageText}"
 
-            const history = await this.getRecentMessages(sessionId);
-            const chatMessages: ChatMessage[] = history.map((msg) => {
-                let content: any = msg.content;
-                if (typeof content === 'string') {
-                    try {
-                        const parsed = JSON.parse(content);
-                        if (typeof parsed === 'object') content = parsed;
-                    } catch (e) { }
-                }
+لطفاً با استفاده از دانش خود، اطلاعات مرتبط و به‌روز (تا حد امکان) در مورد این موضوع ارائه دهید. 
+پاسخ خود را با ساختار زیر ارائه دهید:
+1. **خلاصه** - پاسخ کوتاه و مستقیم
+2. **جزئیات** - توضیحات بیشتر
+3. **منابع پیشنهادی** - وب‌سایت‌هایی که کاربر می‌تواند برای اطلاعات بیشتر مراجعه کند`;
+
+                const history = await this.getRecentMessages(sessionId);
+                const chatMessages: ChatMessage[] = [
+                    ...history.map((msg) => ({
+                        role: msg.role as 'user' | 'assistant',
+                        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+                    })),
+                    { role: 'user' as const, content: webPrompt }
+                ];
+
+                let fullResponse = '';
+                await this.openai.streamChat(
+                    chatMessages,
+                    (chunk) => {
+                        fullResponse += chunk;
+                        onChunk(chunk);
+                    },
+                    model,
+                );
+
+                const [assistantMsg] = await this.db
+                    .insert(messages)
+                    .values({
+                        sessionId,
+                        role: 'assistant',
+                        content: '🌐 **حالت جستجوی وب فعال شد**\n\n⚠️ *توجه: API جستجوی وب فعال نیست. در حال استفاده از دانش AI...*\n\n---\n\n' + fullResponse,
+                        model: model,
+                    })
+                    .returning();
+
+                await this.touchSession(sessionId);
                 return {
-                    role: msg.role as 'user' | 'assistant',
-                    content: content,
-                };
-            });
-
-            let full = '';
-            await this.openai.streamChat(
-                chatMessages,
-                (c) => {
-                    full += c;
-                    onChunk(c);
-                },
-                model,
-            );
-            const [assistantMsg] = await this.db
-                .insert(messages)
-                .values({
                     sessionId,
-                    role: 'assistant',
-                    content: full,
-                    model: model,
-                })
-                .returning();
-            await this.touchSession(sessionId);
-            return {
-                sessionId,
-                userMessageId: userMsg.id,
-                assistantMessageId: assistantMsg.id,
-            };
+                    userMessageId: userMsg.id,
+                    assistantMessageId: assistantMsg.id,
+                };
+            }
         }
 
+        // Normal chat mode
         const history = await this.getRecentMessages(sessionId);
         const chatMessages: ChatMessage[] = history.map((msg) => {
             let content: any = msg.content;
