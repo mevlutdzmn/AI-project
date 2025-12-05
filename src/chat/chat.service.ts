@@ -561,7 +561,7 @@ export class ChatService {
             this.logger.log(`[Web Mode] Starting web search for: ${messageText}`);
             
             // Search API'yi çağır (Serper veya Bing)
-            onChunk('🌐 **در حال جستجو در وب...**\n\n');
+            onChunk('🔍 **در حال جستجو در وب...**\n\n');
             const searchResult = await this.search.search(messageText || '');
             
             if (searchResult.type === 'results' && searchResult.results.length > 0) {
@@ -569,19 +569,24 @@ export class ChatService {
                 this.logger.log(`[Web Mode] Found ${searchResult.results.length} results, summarizing with AI`);
                 
                 const searchContext = searchResult.results
-                    .map((r: any, idx: number) => `[${idx + 1}] ${r.name}\n${r.snippet}\nURL: ${r.url}`)
+                    .map((r: any, idx: number) => `[${idx + 1}] **${r.name}**\nÖzet: ${r.snippet}\nLink: ${r.url}`)
                     .join('\n\n');
                 
-                const webPrompt = `کاربر سوال زیر را پرسیده است: "${messageText}"
+                const webPrompt = `Sen bir web araştırma asistanısın. Kullanıcının sorusu: "${messageText}"
 
-نتایج جستجوی وب:
+Aşağıdaki web arama sonuçlarını kullanarak TÜRKÇE cevap ver:
+
 ${searchContext}
 
-لطفاً با استفاده از این نتایج جستجو، یک پاسخ جامع و مفید به کاربر بدهید. 
-در پاسخ خود:
-1. اطلاعات کلیدی را خلاصه کنید
-2. به منابع معتبر اشاره کنید
-3. لینک‌های مفید را در پاسخ قرار دهید`;
+ÖNEMLİ KURALLAR:
+1. Cevabını düzgün paragraflar halinde yaz
+2. Linkleri MUTLAKA şu markdown formatında ver: [Site Adı](https://url.com)
+3. Her kaynağı cümle içinde doğal bir şekilde linkle
+4. Özet bilgi ver, sonra kaynaklara link at
+5. Fazla teknik detaya girme, kullanıcı dostu ol
+
+Örnek format:
+"Son dakika haberlerine göre... Detaylı bilgi için [TRT Haber](https://www.trthaber.com) ve [Habertürk](https://www.haberturk.com) sitelerini ziyaret edebilirsiniz."`;
 
                 const history = await this.getRecentMessages(sessionId);
                 const chatMessages: ChatMessage[] = [
@@ -607,7 +612,7 @@ ${searchContext}
                     .values({
                         sessionId,
                         role: 'assistant',
-                        content: '🌐 **در حال جستجو در وب...**\n\n' + fullResponse,
+                        content: '🔍 **در حال جستجو در وب...**\n\n' + fullResponse,
                         model: model,
                     })
                     .returning();
@@ -621,12 +626,11 @@ ${searchContext}
                 // API yok veya sonuç yok - sadece AI ile cevap ver (kullanıcıya bilgi verme)
                 this.logger.log(`[Web Mode] No search results, using AI knowledge`);
                 
-                const webPrompt = `کاربر می‌خواهد در وب جستجو کند. سوال او: "${messageText}"
+                const webPrompt = `Kullanıcının sorusu: "${messageText}"
 
-لطفاً با استفاده از دانش خود، اطلاعات مرتبط در مورد این موضوع ارائه دهید. 
-پاسخ خود را با ساختار زیر ارائه دهید:
-1. **خلاصه** - پاسخ کوتاه و مستقیم
-2. **جزئیات** - توضیحات بیشتر`;
+Web araması yapılamadı ama bilgilerinle yardımcı ol. TÜRKÇE cevap ver.
+Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önererek markdown formatında linkle:
+Örnek: "Güncel haberler için [TRT Haber](https://www.trthaber.com) sitesini ziyaret edebilirsiniz."`;
 
                 const history = await this.getRecentMessages(sessionId);
                 const chatMessages: ChatMessage[] = [
@@ -652,7 +656,7 @@ ${searchContext}
                     .values({
                         sessionId,
                         role: 'assistant',
-                        content: '🌐 **در حال جستجو در وب...**\n\n' + fullResponse,
+                        content: '🔍 **در حال جستجو در وب...**\n\n' + fullResponse,
                         model: model,
                     })
                     .returning();
