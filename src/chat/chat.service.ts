@@ -14,13 +14,29 @@ import { MemoryService } from '../memory/memory.service';
 // PDF parse için dynamic import kullanacağız
 
 const IMAGE_KEYWORDS = [
+    // Türkçe
     'görsel',
     'resim',
+    'resmi',
+    'resmini',
     'çiz',
     'oluştur',
     'göster',
     'fotoğraf',
     'manzara',
+    'illüstrasyon',
+    'grafik',
+    // Farsça
+    'تصویر',
+    'عکس',
+    'بساز',
+    'بکش',
+    'نقاشی',
+    'طراحی',
+    'ایجاد کن',
+    'درست کن',
+    'بده',
+    // İngilizce
     'image',
     'picture',
     'draw',
@@ -29,6 +45,11 @@ const IMAGE_KEYWORDS = [
     'photo',
     'paint',
     'sketch',
+    'illustration',
+    'artwork',
+    'design',
+    'make me',
+    'show me',
 ];
 
 @Injectable()
