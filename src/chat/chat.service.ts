@@ -559,57 +559,33 @@ export class ChatService {
 
         if (mode === 'web') {
             this.logger.log(`[Web Mode] Starting web search for: ${messageText}`);
-            const bingKey = this.configService.get<string>('BING_API_KEY');
             
-            if (bingKey) {
-                onChunk('🌐 **در حال جستجو در وب...**\n\n');
-                const searchResult = await this.search.search(messageText || '');
-                let responseText = '';
-                if (searchResult.type === 'results') {
-                    responseText = searchResult.results
-                        .map(
-                            (r: any, idx: number) =>
-                                `${idx + 1}. ${r.name}\n${r.snippet}\n${r.url}`,
-                        )
-                        .join('\n\n');
-                } else if (searchResult.type === 'fallback') {
-                    responseText = searchResult.message;
-                } else {
-                    responseText = searchResult.message || 'No results';
-                }
-
-                onChunk(responseText);
-                const [assistantMsg] = await this.db
-                    .insert(messages)
-                    .values({
-                        sessionId,
-                        role: 'assistant',
-                        content: '🌐 **در حال جستجو در وب...**\n\n' + responseText,
-                        model: model,
-                    })
-                    .returning();
-                await this.touchSession(sessionId);
-                return {
-                    sessionId,
-                    userMessageId: userMsg.id,
-                    assistantMessageId: assistantMsg.id,
-                };
-            } else {
-                // Bing API key yok - AI ile web araması simüle et
-                onChunk('🌐 **حالت جستجوی وب فعال شد**\n\n');
-                onChunk('⚠️ *توجه: API جستجوی وب فعال نیست. در حال استفاده از دانش AI...*\n\n---\n\n');
+            // Search API'yi çağır (Serper veya Bing)
+            onChunk('🌐 **در حال جستجو در وب...**\n\n');
+            const searchResult = await this.search.search(messageText || '');
+            
+            if (searchResult.type === 'results' && searchResult.results.length > 0) {
+                // Gerçek arama sonuçları var - AI ile özetle
+                this.logger.log(`[Web Mode] Found ${searchResult.results.length} results, summarizing with AI`);
                 
-                const webPrompt = `کاربر می‌خواهد در وب جستجو کند. سوال او: "${messageText}"
+                const searchContext = searchResult.results
+                    .map((r: any, idx: number) => `[${idx + 1}] ${r.name}\n${r.snippet}\nURL: ${r.url}`)
+                    .join('\n\n');
+                
+                const webPrompt = `کاربر سوال زیر را پرسیده است: "${messageText}"
 
-لطفاً با استفاده از دانش خود، اطلاعات مرتبط و به‌روز (تا حد امکان) در مورد این موضوع ارائه دهید. 
-پاسخ خود را با ساختار زیر ارائه دهید:
-1. **خلاصه** - پاسخ کوتاه و مستقیم
-2. **جزئیات** - توضیحات بیشتر
-3. **منابع پیشنهادی** - وب‌سایت‌هایی که کاربر می‌تواند برای اطلاعات بیشتر مراجعه کند`;
+نتایج جستجوی وب:
+${searchContext}
+
+لطفاً با استفاده از این نتایج جستجو، یک پاسخ جامع و مفید به کاربر بدهید. 
+در پاسخ خود:
+1. اطلاعات کلیدی را خلاصه کنید
+2. به منابع معتبر اشاره کنید
+3. لینک‌های مفید را در پاسخ قرار دهید`;
 
                 const history = await this.getRecentMessages(sessionId);
                 const chatMessages: ChatMessage[] = [
-                    ...history.map((msg) => ({
+                    ...history.slice(-4).map((msg) => ({
                         role: msg.role as 'user' | 'assistant',
                         content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
                     })),
@@ -631,7 +607,52 @@ export class ChatService {
                     .values({
                         sessionId,
                         role: 'assistant',
-                        content: '🌐 **حالت جستجوی وب فعال شد**\n\n⚠️ *توجه: API جستجوی وب فعال نیست. در حال استفاده از دانش AI...*\n\n---\n\n' + fullResponse,
+                        content: '🌐 **در حال جستجو در وب...**\n\n' + fullResponse,
+                        model: model,
+                    })
+                    .returning();
+                await this.touchSession(sessionId);
+                return {
+                    sessionId,
+                    userMessageId: userMsg.id,
+                    assistantMessageId: assistantMsg.id,
+                };
+            } else {
+                // API yok veya sonuç yok - sadece AI ile cevap ver (kullanıcıya bilgi verme)
+                this.logger.log(`[Web Mode] No search results, using AI knowledge`);
+                
+                const webPrompt = `کاربر می‌خواهد در وب جستجو کند. سوال او: "${messageText}"
+
+لطفاً با استفاده از دانش خود، اطلاعات مرتبط در مورد این موضوع ارائه دهید. 
+پاسخ خود را با ساختار زیر ارائه دهید:
+1. **خلاصه** - پاسخ کوتاه و مستقیم
+2. **جزئیات** - توضیحات بیشتر`;
+
+                const history = await this.getRecentMessages(sessionId);
+                const chatMessages: ChatMessage[] = [
+                    ...history.slice(-4).map((msg) => ({
+                        role: msg.role as 'user' | 'assistant',
+                        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+                    })),
+                    { role: 'user' as const, content: webPrompt }
+                ];
+
+                let fullResponse = '';
+                await this.openai.streamChat(
+                    chatMessages,
+                    (chunk) => {
+                        fullResponse += chunk;
+                        onChunk(chunk);
+                    },
+                    model,
+                );
+
+                const [assistantMsg] = await this.db
+                    .insert(messages)
+                    .values({
+                        sessionId,
+                        role: 'assistant',
+                        content: '🌐 **در حال جستجو در وب...**\n\n' + fullResponse,
                         model: model,
                     })
                     .returning();
