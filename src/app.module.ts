@@ -15,6 +15,7 @@ import { AdminModule } from './admin/admin.module';
 import { FilesModule } from './files/files.module';
 import { MemoryModule } from './memory/memory.module';
 import { ShareModule } from './share/share.module';
+import { SettingsModule } from './settings/settings.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import openaiConfig from './config/openai.config';
@@ -46,6 +47,7 @@ import { validationSchema } from './config/env.validation';
     FilesModule,
     MemoryModule,
     ShareModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [

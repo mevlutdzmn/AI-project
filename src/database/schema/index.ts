@@ -7,3 +7,4 @@ export * from "./auth_sessions";
 export * from "./user_memories";
 export * from "./custom_instructions";
 export * from "./shared_chats";
+export * from "./user_settings";
