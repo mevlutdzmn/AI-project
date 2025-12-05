@@ -175,10 +175,90 @@ export class ChatService {
             .where(
                 and(
                     eq(sessions.userId, userId),
-                    eq(sessions.isDeleted, false)
+                    eq(sessions.isDeleted, false),
+                    eq(sessions.archived, false)
+                )
+            )
+            .orderBy(desc(sessions.pinned), desc(sessions.updatedAt));
+    }
+
+    // Pinned sessions
+    async getPinnedSessions(userId: number) {
+        return this.db
+            .select()
+            .from(sessions)
+            .where(
+                and(
+                    eq(sessions.userId, userId),
+                    eq(sessions.isDeleted, false),
+                    eq(sessions.pinned, true)
                 )
             )
             .orderBy(desc(sessions.updatedAt));
+    }
+
+    // Archived sessions
+    async getArchivedSessions(userId: number) {
+        return this.db
+            .select()
+            .from(sessions)
+            .where(
+                and(
+                    eq(sessions.userId, userId),
+                    eq(sessions.isDeleted, false),
+                    eq(sessions.archived, true)
+                )
+            )
+            .orderBy(desc(sessions.updatedAt));
+    }
+
+    // Toggle pin
+    async togglePinSession(sessionId: string, userId: number) {
+        await this.ensureSessionOwnership(sessionId, userId);
+        
+        const [session] = await this.db
+            .select({ pinned: sessions.pinned })
+            .from(sessions)
+            .where(eq(sessions.id, sessionId));
+
+        const [updated] = await this.db
+            .update(sessions)
+            .set({ pinned: !session.pinned, updatedAt: new Date() })
+            .where(eq(sessions.id, sessionId))
+            .returning();
+
+        return updated;
+    }
+
+    // Toggle archive
+    async toggleArchiveSession(sessionId: string, userId: number) {
+        await this.ensureSessionOwnership(sessionId, userId);
+        
+        const [session] = await this.db
+            .select({ archived: sessions.archived })
+            .from(sessions)
+            .where(eq(sessions.id, sessionId));
+
+        const [updated] = await this.db
+            .update(sessions)
+            .set({ archived: !session.archived, updatedAt: new Date() })
+            .where(eq(sessions.id, sessionId))
+            .returning();
+
+        return updated;
+    }
+
+    // Move to folder
+    async moveSessionToFolder(sessionId: string, userId: number, folderId: number | null) {
+        await this.ensureSessionOwnership(sessionId, userId);
+
+        const [updated] = await this.db
+            .update(sessions)
+            .set({ folderId, updatedAt: new Date() })
+            .where(eq(sessions.id, sessionId))
+            .returning();
+
+        return updated;
     }
 
     async getSessionMessages(sessionId: string, userId: number) {

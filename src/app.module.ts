@@ -16,6 +16,8 @@ import { FilesModule } from './files/files.module';
 import { MemoryModule } from './memory/memory.module';
 import { ShareModule } from './share/share.module';
 import { SettingsModule } from './settings/settings.module';
+import { FoldersModule } from './folders/folders.module';
+import { UsageModule } from './usage/usage.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import openaiConfig from './config/openai.config';
@@ -48,6 +50,8 @@ import { validationSchema } from './config/env.validation';
     MemoryModule,
     ShareModule,
     SettingsModule,
+    FoldersModule,
+    UsageModule,
   ],
   controllers: [AppController],
   providers: [

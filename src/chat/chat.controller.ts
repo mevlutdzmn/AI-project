@@ -189,6 +189,48 @@ export class ChatController {
         return this.chatService.deleteSession(sessionId, req.user.id);
     }
 
+    @Get('sessions/pinned')
+    @ApiOperation({ summary: 'Get pinned sessions' })
+    @ApiResponse({ status: 200, description: 'Pinned sessions list' })
+    async getPinnedSessions(@Req() req) {
+        return this.chatService.getPinnedSessions(req.user.id);
+    }
+
+    @Get('sessions/archived')
+    @ApiOperation({ summary: 'Get archived sessions' })
+    @ApiResponse({ status: 200, description: 'Archived sessions list' })
+    async getArchivedSessions(@Req() req) {
+        return this.chatService.getArchivedSessions(req.user.id);
+    }
+
+    @Post('sessions/:sessionId/pin')
+    @ApiOperation({ summary: 'Toggle pin session' })
+    @ApiParam({ name: 'sessionId', description: 'Session ID' })
+    @ApiResponse({ status: 200, description: 'Session pin toggled' })
+    async togglePinSession(@Req() req, @Param('sessionId') sessionId: string) {
+        return this.chatService.togglePinSession(sessionId, req.user.id);
+    }
+
+    @Post('sessions/:sessionId/archive')
+    @ApiOperation({ summary: 'Toggle archive session' })
+    @ApiParam({ name: 'sessionId', description: 'Session ID' })
+    @ApiResponse({ status: 200, description: 'Session archive toggled' })
+    async toggleArchiveSession(@Req() req, @Param('sessionId') sessionId: string) {
+        return this.chatService.toggleArchiveSession(sessionId, req.user.id);
+    }
+
+    @Post('sessions/:sessionId/move')
+    @ApiOperation({ summary: 'Move session to folder' })
+    @ApiParam({ name: 'sessionId', description: 'Session ID' })
+    @ApiResponse({ status: 200, description: 'Session moved to folder' })
+    async moveSessionToFolder(
+        @Req() req,
+        @Param('sessionId') sessionId: string,
+        @Body() body: { folderId: number | null }
+    ) {
+        return this.chatService.moveSessionToFolder(sessionId, req.user.id, body.folderId);
+    }
+
     @Put('sessions/:sessionId')
     @ApiOperation({ summary: 'Update session title' })
     @ApiParam({ name: 'sessionId', description: 'Session ID' })
