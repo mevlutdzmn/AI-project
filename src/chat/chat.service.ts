@@ -533,6 +533,30 @@ export class ChatService {
             return { sessionId, userMessageId: userMsg.id };
         }
 
+        // ✅ Research Mode - Derin Araştırma
+        if (mode === 'research') {
+            return this.handleResearchMode(
+                sessionId,
+                userId,
+                messageText || '',
+                onChunk,
+                model,
+                userMsg.id,
+            );
+        }
+
+        // ✅ Agent Mode
+        if (mode === 'agent') {
+            return this.handleAgentMode(
+                sessionId,
+                userId,
+                messageText || '',
+                onChunk,
+                model,
+                userMsg.id,
+            );
+        }
+
         if (mode === 'web') {
             const bingKey = this.configService.get<string>('BING_API_KEY');
             if (bingKey) {
@@ -1075,5 +1099,178 @@ User message: "${userMessage.substring(0, 200)}"`;
             .where(eq(messages.id, messageId));
         await this.touchSession(msg.sessionId);
         return { success: true };
+    }
+
+    // ✅ Research Mode - Derin Araştırma (Web araması + AI analizi)
+    private async handleResearchMode(
+        sessionId: string,
+        userId: number,
+        query: string,
+        onChunk: (chunk: string) => void,
+        model: string,
+        userMsgId: number,
+    ): Promise<{ sessionId: string; userMessageId: number; assistantMessageId?: number }> {
+        this.logger.log(`[Research Mode] Starting deep research for: ${query}`);
+
+        // 1. Web araması yap
+        const bingKey = this.configService.get<string>('BING_API_KEY');
+        let searchContext = '';
+        
+        if (bingKey) {
+            try {
+                onChunk('🔍 **در حال جستجوی وب...**\n\n');
+                
+                const searchResult = await this.search.search(query);
+                
+                if (searchResult.type === 'results' && searchResult.results?.length > 0) {
+                    // En iyi 5 sonucu al
+                    const topResults = searchResult.results.slice(0, 5);
+                    searchContext = topResults.map((r: any, idx: number) => 
+                        `**منبع ${idx + 1}:** ${r.name}\n${r.snippet}\nلینک: ${r.url}`
+                    ).join('\n\n');
+                    
+                    onChunk(`📚 **${topResults.length} منبع یافت شد**\n\n`);
+                }
+            } catch (error) {
+                this.logger.error('[Research Mode] Search error:', error);
+                onChunk('⚠️ خطا در جستجوی وب. در حال ادامه با اطلاعات موجود...\n\n');
+            }
+        }
+
+        // 2. AI ile derin analiz
+        onChunk('🧠 **در حال تحلیل عمیق...**\n\n---\n\n');
+        
+        const researchPrompt = `شما یک محقق متخصص هستید. یک گزارش تحقیقاتی جامع و دقیق در مورد موضوع زیر تهیه کنید.
+
+**سوال/موضوع:** ${query}
+
+${searchContext ? `**اطلاعات جمع‌آوری شده از وب:**\n${searchContext}\n\n` : ''}
+
+**لطفاً گزارش خود را با ساختار زیر ارائه دهید:**
+1. **خلاصه اجرایی** - یک پاراگراف مختصر
+2. **تحلیل عمیق** - بررسی جزئیات و نکات کلیدی
+3. **یافته‌های اصلی** - نکات مهم به صورت لیست
+4. **نتیجه‌گیری** - جمع‌بندی نهایی
+${searchContext ? '5. **منابع** - لیست منابع استفاده شده' : ''}
+
+از فرمت Markdown استفاده کنید. پاسخ باید جامع، دقیق و مستند باشد.`;
+
+        const history = await this.getRecentMessages(sessionId);
+        const chatMessages: ChatMessage[] = [
+            ...history.map((msg) => ({
+                role: msg.role as 'user' | 'assistant',
+                content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+            })),
+            { role: 'user' as const, content: researchPrompt }
+        ];
+
+        let fullResponse = '';
+        await this.openai.streamChat(
+            chatMessages,
+            (chunk) => {
+                fullResponse += chunk;
+                onChunk(chunk);
+            },
+            model,
+        );
+
+        const [assistantMsg] = await this.db
+            .insert(messages)
+            .values({
+                sessionId,
+                role: 'assistant',
+                content: fullResponse,
+                model: model,
+            })
+            .returning();
+
+        await this.touchSession(sessionId);
+
+        return {
+            sessionId,
+            userMessageId: userMsgId,
+            assistantMessageId: assistantMsg.id,
+        };
+    }
+
+    // ✅ Agent Mode - Görev yürütme
+    private async handleAgentMode(
+        sessionId: string,
+        userId: number,
+        task: string,
+        onChunk: (chunk: string) => void,
+        model: string,
+        userMsgId: number,
+    ): Promise<{ sessionId: string; userMessageId: number; assistantMessageId?: number }> {
+        this.logger.log(`[Agent Mode] Starting task execution for: ${task}`);
+
+        onChunk('🤖 **حالت ایجنت فعال شد**\n\n');
+        onChunk('📋 **در حال تحلیل وظیفه...**\n\n');
+
+        const agentPrompt = `شما یک ایجنت هوشمند هستید که می‌توانید وظایف پیچیده را به مراحل کوچک‌تر تقسیم کرده و آنها را اجرا کنید.
+
+**وظیفه درخواستی:** ${task}
+
+**لطفاً با ساختار زیر پاسخ دهید:**
+
+## 📌 تحلیل وظیفه
+توضیح مختصر در مورد وظیفه و اهداف آن
+
+## 📋 برنامه اجرایی
+### مرحله 1: [عنوان]
+- جزئیات اجرا
+- خروجی مورد انتظار
+
+### مرحله 2: [عنوان]
+- جزئیات اجرا
+- خروجی مورد انتظار
+
+(و به همین ترتیب...)
+
+## ⚡ اجرای مراحل
+اجرای مرحله به مرحله وظیفه با توضیحات
+
+## ✅ نتیجه نهایی
+خلاصه کار انجام شده و خروجی نهایی
+
+---
+*توجه: من یک ایجنت AI هستم و فقط می‌توانم وظایف متنی و تحلیلی را انجام دهم. برای وظایف نیازمند دسترسی به سیستم‌های خارجی، لطفاً ابزارهای مناسب را فراهم کنید.*`;
+
+        const history = await this.getRecentMessages(sessionId);
+        const chatMessages: ChatMessage[] = [
+            ...history.map((msg) => ({
+                role: msg.role as 'user' | 'assistant',
+                content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+            })),
+            { role: 'user' as const, content: agentPrompt }
+        ];
+
+        let fullResponse = '';
+        await this.openai.streamChat(
+            chatMessages,
+            (chunk) => {
+                fullResponse += chunk;
+                onChunk(chunk);
+            },
+            model,
+        );
+
+        const [assistantMsg] = await this.db
+            .insert(messages)
+            .values({
+                sessionId,
+                role: 'assistant',
+                content: fullResponse,
+                model: model,
+            })
+            .returning();
+
+        await this.touchSession(sessionId);
+
+        return {
+            sessionId,
+            userMessageId: userMsgId,
+            assistantMessageId: assistantMsg.id,
+        };
     }
 }
