@@ -523,11 +523,15 @@ export class ChatService {
         // Log incoming message type for debugging
         this.logger.log(`[sendMessage] Message type: ${typeof userMessage}, isArray: ${Array.isArray(userMessage)}`);
         if (Array.isArray(userMessage)) {
-            this.logger.log(`[sendMessage] Message parts: ${JSON.stringify(userMessage.map(p => ({ type: p.type, hasImageUrl: !!p.image_url })))}`);
+            this.logger.log(`[sendMessage] Message parts: ${JSON.stringify(userMessage.map(p => ({ type: p.type, hasImageUrl: !!p.image_url, hasPdf: !!p.pdf_data })))}`);
         }
 
+        // PDF ve diğer dosyaları işle
+        const processedMessage = await this.processMessageContent(userMessage);
+        this.logger.log(`[sendMessage] Processed message type: ${typeof processedMessage}, isArray: ${Array.isArray(processedMessage)}`);
+
         // Serialize array messages as JSON for database storage
-        const contentToStore = Array.isArray(userMessage) ? JSON.stringify(userMessage) : userMessage;
+        const contentToStore = Array.isArray(processedMessage) ? JSON.stringify(processedMessage) : processedMessage;
 
         const [userMsg] = await this.db
             .insert(messages)
@@ -546,10 +550,10 @@ export class ChatService {
 
         if (messageCount.length === 1) {
             let titleText = '';
-            if (typeof userMessage === 'string') {
-                titleText = userMessage;
-            } else if (Array.isArray(userMessage)) {
-                titleText = userMessage
+            if (typeof processedMessage === 'string') {
+                titleText = processedMessage;
+            } else if (Array.isArray(processedMessage)) {
+                titleText = processedMessage
                     .filter((part: any) => part.type === 'text')
                     .map((part: any) => part.text || '')
                     .join(' ');
@@ -566,16 +570,16 @@ export class ChatService {
         }
 
         let messageText = '';
-        if (typeof userMessage === 'string') {
-            messageText = userMessage;
-        } else if (Array.isArray(userMessage)) {
-            messageText = userMessage
+        if (typeof processedMessage === 'string') {
+            messageText = processedMessage;
+        } else if (Array.isArray(processedMessage)) {
+            messageText = processedMessage
                 .filter((part: any) => part.type === 'text')
                 .map((part: any) => part.text || '')
                 .join(' ');
         }
 
-        if (mode === 'image' || this.isImageRequest(userMessage)) {
+        if (mode === 'image' || this.isImageRequest(processedMessage)) {
             const imageResponse = await this.handleImageRequest(
                 sessionId,
                 messageText || 'Generate an image',
