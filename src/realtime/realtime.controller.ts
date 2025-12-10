@@ -1,4 +1,4 @@
-import { Controller, Post, Req, Res, HttpStatus, RawBodyRequest } from '@nestjs/common';
+import { Controller, Post, Req, Res, HttpStatus } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 
@@ -69,10 +69,6 @@ RULES:
         }
       };
 
-      // FormData oluştur
-      const FormData = (await import('form-data')).default;
-      const formData = new FormData();
-      
       // SDP'yi parse et
       let sdp: string;
       try {
@@ -86,23 +82,34 @@ RULES:
         sdp = bodyText;
       }
 
-      formData.append('sdp', sdp);
-      formData.append('session', JSON.stringify(sessionConfig));
+      // Multipart form-data oluştur (manuel)
+      const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+      
+      let formBody = '';
+      formBody += `--${boundary}\r\n`;
+      formBody += `Content-Disposition: form-data; name="sdp"\r\n\r\n`;
+      formBody += `${sdp}\r\n`;
+      formBody += `--${boundary}\r\n`;
+      formBody += `Content-Disposition: form-data; name="session"\r\n\r\n`;
+      formBody += `${JSON.stringify(sessionConfig)}\r\n`;
+      formBody += `--${boundary}--\r\n`;
 
       console.log('[realtime] Sending to OpenAI...');
 
-      // Node.js native fetch ile gönder
       const response = await fetch(openaiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          ...formData.getHeaders(),
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
         },
-        body: formData as any,
+        body: formBody,
       });
 
       const respText = await response.text();
       console.log('[realtime] OpenAI response status:', response.status);
+      if (response.status !== 200 && response.status !== 201) {
+        console.log('[realtime] OpenAI error response:', respText.substring(0, 500));
+      }
 
       // Headers'ı kopyala
       const location = response.headers.get('location');
