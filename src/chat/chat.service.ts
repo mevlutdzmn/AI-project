@@ -14,19 +14,37 @@ import { MemoryService } from '../memory/memory.service';
 // PDF parse için dynamic import kullanacağız
 
 const IMAGE_KEYWORDS = [
-    // Türkçe
+    // Türkçe - fiil kombinasyonları
+    'resim yap',
+    'resmi yap',
+    'resim oluştur',
+    'resmi oluştur',
+    'resim çiz',
+    'resmi çiz',
+    'görsel yap',
+    'görsel oluştur',
+    'fotoğraf yap',
+    'fotoğraf oluştur',
+    'bir resim',
+    'bana resim',
+    'bana bir resim',
+    'bana görsel',
+    // Türkçe - tekil kelimeler (fallback)
     'görsel',
-    'resim',
-    'resmi',
-    'resmini',
     'çiz',
-    'oluştur',
-    'göster',
-    'fotoğraf',
-    'manzara',
     'illüstrasyon',
-    'grafik',
-    // Farsça
+    'grafik oluştur',
+    'manzara çiz',
+    // Farsça - fiil kombinasyonları
+    'تصویر بساز',
+    'عکس بساز',
+    'تصویر بکش',
+    'عکس بده',
+    'نقاشی کن',
+    'یک تصویر',
+    'برام تصویر',
+    'برایم تصویر',
+    // Farsça - tekil
     'تصویر',
     'عکس',
     'بساز',
@@ -34,9 +52,20 @@ const IMAGE_KEYWORDS = [
     'نقاشی',
     'طراحی',
     'ایجاد کن',
-    'درست کن',
-    'بده',
-    // İngilizce
+    // İngilizce - fiil kombinasyonları
+    'create image',
+    'create a image',
+    'create an image',
+    'generate image',
+    'generate a image', 
+    'generate an image',
+    'draw a',
+    'draw me',
+    'make me a',
+    'make an image',
+    'create picture',
+    'generate picture',
+    // İngilizce - tekil
     'image',
     'picture',
     'draw',
