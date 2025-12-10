@@ -1,0 +1,127 @@
+import { Controller, Post, Req, Res, HttpStatus, RawBodyRequest } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+
+@Controller('realtime')
+export class RealtimeController {
+  constructor(private configService: ConfigService) {}
+
+  /**
+   * POST /api/v1/realtime/session
+   * OpenAI Realtime API için session oluşturur
+   * OPENAI_API_KEY backend'de saklanıyor
+   */
+  @Post('session')
+  async createSession(@Req() req: Request, @Res() res: Response) {
+    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    
+    if (!apiKey) {
+      console.error('[realtime] Missing OPENAI_API_KEY');
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ 
+        error: 'Missing server OPENAI_API_KEY' 
+      });
+    }
+
+    try {
+      const contentType = req.headers['content-type'] || 'application/json';
+      let bodyText: string;
+      
+      if (typeof req.body === 'string') {
+        bodyText = req.body;
+      } else if (Buffer.isBuffer(req.body)) {
+        bodyText = req.body.toString('utf8');
+      } else {
+        bodyText = JSON.stringify(req.body);
+      }
+
+      console.log('[realtime] Creating session, body_len:', bodyText.length);
+
+      const openaiUrl = 'https://api.openai.com/v1/realtime/calls';
+      
+      // Session configuration - çok dilli destek
+      const sessionConfig = {
+        type: "realtime",
+        model: "gpt-4o-realtime-preview",
+        instructions: `You are a multilingual voice assistant. Your PRIMARY RULE is to ALWAYS respond in the EXACT SAME LANGUAGE the user speaks.
+
+LANGUAGE MATCHING - THIS IS YOUR MOST IMPORTANT RULE:
+1. Listen carefully to the user's language
+2. Identify the language they are speaking
+3. Respond ONLY in that SAME language
+4. NEVER switch to a different language
+
+LANGUAGE EXAMPLES:
+- If user speaks PERSIAN/FARSI (سلام، خوبی، چطوری) → respond in PERSIAN
+- If user speaks TURKISH (Merhaba, Selam, Nasılsın) → respond in TURKISH
+- If user speaks ENGLISH (Hello, Hi, How are you) → respond in ENGLISH
+- If user speaks ARABIC (مرحبا، كيف حالك) → respond in ARABIC
+- If user speaks GERMAN (Hallo, Guten Tag) → respond in GERMAN
+- If user speaks FRENCH (Bonjour, Salut) → respond in FRENCH
+
+RULES:
+1. Keep responses short (1-2 sentences)
+2. Be natural and friendly
+3. NEVER default to any specific language - MATCH THE USER'S LANGUAGE`,
+        audio: {
+          output: {
+            voice: "alloy"
+          }
+        }
+      };
+
+      // FormData oluştur
+      const FormData = (await import('form-data')).default;
+      const formData = new FormData();
+      
+      // SDP'yi parse et
+      let sdp: string;
+      try {
+        if (contentType.includes('application/json')) {
+          const parsed = JSON.parse(bodyText);
+          sdp = parsed.sdp || bodyText;
+        } else {
+          sdp = bodyText;
+        }
+      } catch {
+        sdp = bodyText;
+      }
+
+      formData.append('sdp', sdp);
+      formData.append('session', JSON.stringify(sessionConfig));
+
+      console.log('[realtime] Sending to OpenAI...');
+
+      // Node.js native fetch ile gönder
+      const response = await fetch(openaiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          ...formData.getHeaders(),
+        },
+        body: formData as any,
+      });
+
+      const respText = await response.text();
+      console.log('[realtime] OpenAI response status:', response.status);
+
+      // Headers'ı kopyala
+      const location = response.headers.get('location');
+      if (location) {
+        res.setHeader('location', location);
+      }
+
+      const respContentType = response.headers.get('content-type');
+      if (respContentType) {
+        res.setHeader('content-type', respContentType);
+      }
+
+      return res.status(response.status).send(respText);
+    } catch (error: any) {
+      console.error('[realtime] Error:', error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: 'Failed to create realtime session',
+        message: String(error),
+      });
+    }
+  }
+}
