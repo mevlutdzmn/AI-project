@@ -21,29 +21,49 @@ export class SettingsService {
   ) {}
 
   async getSettings(userId: number) {
-    const settings = await this.db
+    // Önce var olan ayarları bul
+    let settings = await this.db
       .select()
       .from(schema.user_settings)
       .where(eq(schema.user_settings.userId, userId))
       .limit(1);
 
     if (settings.length === 0) {
-      // Create default settings if not exists
-      const newSettings = await this.db
-        .insert(schema.user_settings)
-        .values({
-          userId,
-          theme: "dark",
-          language: "fa",
-          showExtraModels: false,
-          emailNotifications: true,
-          browserNotifications: false,
-          saveHistory: true,
-          improveModel: false,
-        })
-        .returning();
+      // Kayıt yoksa upsert ile oluştur (race condition'ı önler)
+      try {
+        const newSettings = await this.db
+          .insert(schema.user_settings)
+          .values({
+            userId,
+            theme: "dark",
+            language: "fa",
+            showExtraModels: false,
+            emailNotifications: true,
+            browserNotifications: false,
+            saveHistory: true,
+            improveModel: false,
+          })
+          .onConflictDoNothing({ target: schema.user_settings.userId })
+          .returning();
 
-      return newSettings[0];
+        if (newSettings.length > 0) {
+          return newSettings[0];
+        }
+        
+        // onConflictDoNothing çalıştıysa, kaydı tekrar çek
+        settings = await this.db
+          .select()
+          .from(schema.user_settings)
+          .where(eq(schema.user_settings.userId, userId))
+          .limit(1);
+      } catch {
+        // Duplicate key hatası olursa, kaydı tekrar çek
+        settings = await this.db
+          .select()
+          .from(schema.user_settings)
+          .where(eq(schema.user_settings.userId, userId))
+          .limit(1);
+      }
     }
 
     return settings[0];

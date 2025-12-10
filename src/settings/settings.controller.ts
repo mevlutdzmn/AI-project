@@ -26,7 +26,7 @@ export class SettingsController {
 
   @Get()
   async getSettings(@Req() req: any) {
-    const userId = req.user.userId;
+    const userId = req.user.id;
     return this.settingsService.getSettings(userId);
   }
 
@@ -35,7 +35,7 @@ export class SettingsController {
     @Req() req: any,
     @Body() updateData: UpdateSettingsDto,
   ) {
-    const userId = req.user.userId;
+    const userId = req.user.id;
     return this.settingsService.updateSettings(userId, updateData);
   }
 }
