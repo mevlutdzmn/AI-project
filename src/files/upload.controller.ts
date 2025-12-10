@@ -1,6 +1,7 @@
 import {
     Controller,
     Post,
+    Body,
     UploadedFile,
     UseInterceptors,
     UseGuards,
@@ -15,6 +16,7 @@ import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
 import { UploadService } from './upload.service';
+import axios from 'axios';
 
 // Detect if running on Vercel
 const isVercel = !!process.env.VERCEL;
@@ -142,5 +144,73 @@ export class UploadController {
             url: fileUrl,
             content: fileContent,
         };
+    }
+
+    @Post('save-image-url')
+    @UseGuards(AuthGuard('jwt'))
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Download image from URL and save to server' })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                imageUrl: {
+                    type: 'string',
+                    description: 'URL of the image to download and save',
+                },
+            },
+        },
+    })
+    @ApiResponse({ status: 201, description: 'Image saved successfully' })
+    @ApiResponse({ status: 400, description: 'Invalid URL' })
+    async saveImageFromUrl(@Body('imageUrl') imageUrl: string, @Req() req) {
+        if (!imageUrl) {
+            throw new HttpException('Image URL is required', HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            // Download image from URL
+            const response = await axios.get(imageUrl, {
+                responseType: 'arraybuffer',
+                timeout: 30000,
+            });
+
+            const buffer = Buffer.from(response.data);
+            const randomName = Array(32)
+                .fill(null)
+                .map(() => Math.round(Math.random() * 16).toString(16))
+                .join('');
+            const fileName = `${randomName}.png`;
+
+            let savedUrl: string;
+
+            if (isVercel) {
+                // Upload to Vercel Blob Storage
+                const { put } = await import('@vercel/blob');
+                const blob = await put(fileName, buffer, {
+                    access: 'public',
+                    token: process.env.BLOB_READ_WRITE_TOKEN,
+                });
+                savedUrl = blob.url;
+            } else {
+                // Save to local uploads folder
+                const dest = process.env.UPLOAD_DIR || './uploads';
+                if (!fs.existsSync(dest)) {
+                    fs.mkdirSync(dest, { recursive: true });
+                }
+                const filePath = `${dest}/${fileName}`;
+                fs.writeFileSync(filePath, buffer);
+                savedUrl = `${process.env.BACKEND_URL || 'http://localhost:3001'}/uploads/${fileName}`;
+            }
+
+            return {
+                success: true,
+                url: savedUrl,
+                filename: fileName,
+            };
+        } catch (error) {
+            console.error('Error saving image from URL:', error);
+            throw new HttpException('Failed to save image', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 }

@@ -193,4 +193,55 @@ export class ShareService {
       })),
     };
   }
+
+  // ✅ Share single message
+  async shareMessage(content: string, userId?: number) {
+    const shareToken = randomBytes(16).toString('hex');
+    
+    const [result] = await this.db
+      .insert(schema.sharedMessages)
+      .values({
+        shareToken,
+        content,
+        role: 'assistant',
+        userId: userId || null,
+      })
+      .returning();
+
+    return {
+      shareToken: result.shareToken,
+      shareUrl: `/share/message/${result.shareToken}`,
+    };
+  }
+
+  // ✅ Get shared message (public)
+  async getSharedMessage(shareToken: string) {
+    const shared = await this.db
+      .select()
+      .from(schema.sharedMessages)
+      .where(eq(schema.sharedMessages.shareToken, shareToken))
+      .limit(1);
+
+    if (!shared[0]) {
+      throw new NotFoundException('Shared message not found');
+    }
+
+    // Check expiration
+    if (shared[0].expiresAt && new Date() > shared[0].expiresAt) {
+      throw new NotFoundException('Share link has expired');
+    }
+
+    // Increment view count
+    await this.db
+      .update(schema.sharedMessages)
+      .set({ viewCount: (shared[0].viewCount || 0) + 1 })
+      .where(eq(schema.sharedMessages.shareToken, shareToken));
+
+    return {
+      content: shared[0].content,
+      role: shared[0].role,
+      createdAt: shared[0].createdAt,
+      viewCount: (shared[0].viewCount || 0) + 1,
+    };
+  }
 }

@@ -5,13 +5,14 @@ import {
   Delete,
   Param,
   Query,
+  Body,
   UseGuards,
   Request,
   Res,
   Header,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ShareService } from './share.service';
 
@@ -89,5 +90,30 @@ export class ShareController {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="chat-export.json"');
     res.send(JSON.stringify(json, null, 2));
+  }
+
+  // ✅ Share single message (requires auth)
+  @Post('share/message')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Share a single message and get a link' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'Message content to share' },
+      },
+    },
+  })
+  async shareMessage(@Body('content') content: string, @Request() req) {
+    const userId = req.user?.sub || req.user?.id;
+    return this.shareService.shareMessage(content, userId);
+  }
+
+  // ✅ Get shared message (public - no auth)
+  @Get('share/message/:shareToken')
+  @ApiOperation({ summary: 'Get a shared message by token (public)' })
+  async getSharedMessage(@Param('shareToken') shareToken: string) {
+    return this.shareService.getSharedMessage(shareToken);
   }
 }

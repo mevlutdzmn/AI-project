@@ -7,6 +7,7 @@ export * from "./auth_sessions";
 export * from "./user_memories";
 export * from "./custom_instructions";
 export * from "./shared_chats";
+export * from "./shared_messages";
 export * from "./user_settings";
 export * from "./folders";
 export * from "./usage_logs";
