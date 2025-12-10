@@ -490,7 +490,7 @@ export class ChatService {
     }
 
     async sendMessageStream(
-        sessionId: string,
+        sessionId: string | null,
         userId: number,
         userMessage: any,
         onChunk: (chunk: string) => void,
@@ -500,8 +500,15 @@ export class ChatService {
         sessionId: string;
         userMessageId: number;
         assistantMessageId?: number;
+        isNewSession?: boolean;
     }> {
         await this.validatePremiumAccess(userId, model, mode);
+        
+        // ✅ ChatGPT tarzı: SessionId yoksa AI yanıtından SONRA session oluştur
+        if (!sessionId) {
+            return this.handleNewSessionWithAI(userId, userMessage, onChunk, model, mode);
+        }
+        
         await this.ensureSessionOwnership(sessionId, userId);
 
         // Ensure content is not null/undefined
@@ -970,6 +977,104 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
             await this.touchSession(sessionId);
             return errorMsg;
         }
+    }
+
+    /**
+     * ✅ ChatGPT tarzı: Önce AI yanıtı al, sonra session oluştur
+     * Session sadece AI başarıyla yanıt verdikten sonra oluşturulur
+     */
+    private async handleNewSessionWithAI(
+        userId: number,
+        userMessage: any,
+        onChunk: (chunk: string) => void,
+        model: string,
+        mode?: string,
+    ): Promise<{
+        sessionId: string;
+        userMessageId: number;
+        assistantMessageId?: number;
+        isNewSession: boolean;
+    }> {
+        // PDF ve dosyaları işle
+        const processedMessage = await this.processMessageContent(userMessage);
+        
+        let messageText = '';
+        if (typeof processedMessage === 'string') {
+            messageText = processedMessage;
+        } else if (Array.isArray(processedMessage)) {
+            messageText = processedMessage
+                .filter((part: any) => part.type === 'text')
+                .map((part: any) => part.text || '')
+                .join(' ');
+        }
+
+        // ✅ ÖNCE AI yanıtını al (session oluşturmadan)
+        let fullResponse = '';
+        
+        // Chat mesajlarını hazırla (tek mesajlık geçmiş)
+        const chatMessages: ChatMessage[] = [
+            { role: 'user' as const, content: processedMessage }
+        ];
+
+        try {
+            await this.openai.streamChat(
+                chatMessages,
+                (chunk) => {
+                    fullResponse += chunk;
+                    onChunk(chunk);
+                },
+                model,
+            );
+        } catch (error) {
+            this.logger.error('[handleNewSessionWithAI] AI streaming failed:', error);
+            throw error;
+        }
+
+        // ✅ AI yanıtı başarılı - şimdi session oluştur
+        const [newSession] = await this.db
+            .insert(sessions)
+            .values({
+                userId,
+                title: 'Yeni Sohbet', // Geçici title, AI ile güncellenecek
+            })
+            .returning();
+
+        const sessionId = newSession.id;
+        this.logger.log(`[handleNewSessionWithAI] Created new session ${sessionId} after AI response`);
+
+        // Mesajları kaydet
+        const contentToStore = Array.isArray(processedMessage) ? JSON.stringify(processedMessage) : processedMessage;
+
+        const [userMsg] = await this.db
+            .insert(messages)
+            .values({
+                sessionId,
+                role: 'user',
+                content: contentToStore,
+            })
+            .returning();
+
+        const [assistantMsg] = await this.db
+            .insert(messages)
+            .values({
+                sessionId,
+                role: 'assistant',
+                content: fullResponse,
+                model: model,
+            })
+            .returning();
+
+        await this.touchSession(sessionId);
+        
+        // ✅ AI ile başlık oluştur
+        await this.autoGenerateTitle(sessionId);
+
+        return {
+            sessionId,
+            userMessageId: userMsg.id,
+            assistantMessageId: assistantMsg.id,
+            isNewSession: true,
+        };
     }
 
     private async validatePremiumAccess(

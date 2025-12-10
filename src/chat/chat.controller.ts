@@ -101,6 +101,7 @@ export class ChatController {
     }
 
     @Post('messages/stream')
+    @SkipThrottle()
     @ApiOperation({ summary: 'Send message to AI with SSE streaming' })
     @ApiResponse({ status: 200, description: 'Stream started' })
     async sendMessageStream(
@@ -117,13 +118,13 @@ export class ChatController {
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
         res.setHeader('Transfer-Encoding', 'chunked');
-        
+
         // ✅ Flush headers immediately to start connection
         res.flushHeaders();
 
         try {
             const result = await this.chatService.sendMessageStream(
-                sessionId,
+                sessionId || null, // ✅ ChatGPT tarzı: sessionId yoksa null gönder
                 userId,
                 message,
                 (chunk: string) => {
@@ -143,6 +144,7 @@ export class ChatController {
                     sessionId: result.sessionId,
                     userMessageId: result.userMessageId,
                     assistantMessageId: result.assistantMessageId,
+                    isNewSession: result.isNewSession || false,
                 })}\n\n`,
             );
             res.write('data: [DONE]\n\n');

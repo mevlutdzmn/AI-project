@@ -18,6 +18,7 @@ import { ShareModule } from './share/share.module';
 import { SettingsModule } from './settings/settings.module';
 import { FoldersModule } from './folders/folders.module';
 import { UsageModule } from './usage/usage.module';
+import { AudioModule } from './audio/audio.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import openaiConfig from './config/openai.config';
@@ -52,6 +53,7 @@ import { validationSchema } from './config/env.validation';
     SettingsModule,
     FoldersModule,
     UsageModule,
+    AudioModule,
   ],
   controllers: [AppController],
   providers: [
