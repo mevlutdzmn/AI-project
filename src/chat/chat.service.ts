@@ -343,54 +343,75 @@ export class ChatService {
     }
 
     // Mesajda PDF var mı kontrol et ve işle
-    private async processMessageContent(message: any): Promise<string | any[]> {
+    // Returns: { displayContent: for database, aiContent: for AI with PDF text }
+    private async processMessageContent(message: any): Promise<{ displayContent: string | any[], aiContent: string | any[] }> {
         this.logger.log(`[processMessageContent] Input type: ${typeof message}, isArray: ${Array.isArray(message)}`);
         
         if (typeof message === 'string') {
-            return message;
+            return { displayContent: message, aiContent: message };
         }
 
         if (Array.isArray(message)) {
             this.logger.log(`[processMessageContent] Array length: ${message.length}`);
-            const processedParts: any[] = [];
+            const displayParts: any[] = [];
+            const aiParts: any[] = [];
             let pdfText = '';
+            let pdfFileName = '';
 
             for (const part of message) {
                 this.logger.log(`[processMessageContent] Processing part type: ${part.type}`);
                 
                 if (part.type === 'pdf' && part.pdf_data?.url) {
-                    // PDF'den metin çıkar
+                    // PDF'den metin çıkar - sadece AI için
                     this.logger.log(`[processMessageContent] Found PDF: ${part.pdf_data.name}`);
                     const extractedText = await this.extractPdfText(part.pdf_data.url);
                     this.logger.log(`[processMessageContent] PDF extracted text length: ${extractedText.length}`);
                     pdfText = `\n\n[PDF Dosyası: ${part.pdf_data.name || 'document.pdf'}]\n\`\`\`\n${extractedText}\n\`\`\``;
+                    pdfFileName = part.pdf_data.name || 'document.pdf';
                 } else if (part.type === 'text') {
-                    processedParts.push(part);
+                    displayParts.push(part);
+                    aiParts.push({ ...part }); // Clone for AI
                 } else if (part.type === 'image_url') {
-                    processedParts.push(part);
+                    displayParts.push(part);
+                    aiParts.push(part);
                 }
             }
 
-            // Eğer PDF varsa, text'e ekle
-            if (pdfText) {
-                const textPart = processedParts.find(p => p.type === 'text');
+            // Display content: sadece dosya adı referansı ile
+            if (pdfFileName) {
+                const textPart = displayParts.find(p => p.type === 'text');
                 if (textPart) {
-                    textPart.text = (textPart.text || '') + pdfText;
+                    textPart.text = (textPart.text || '').trim() + ` [${pdfFileName}]`;
                 } else {
-                    processedParts.unshift({ type: 'text', text: pdfText });
+                    displayParts.unshift({ type: 'text', text: `[${pdfFileName}]` });
                 }
             }
 
-            // Sadece image_url varsa array döndür, yoksa string
-            const hasImage = processedParts.some(p => p.type === 'image_url');
-            if (hasImage) {
-                return processedParts;
-            } else {
-                return processedParts.map(p => p.text || '').join('');
+            // AI content: PDF içeriği ile
+            if (pdfText) {
+                const aiTextPart = aiParts.find(p => p.type === 'text');
+                if (aiTextPart) {
+                    aiTextPart.text = (aiTextPart.text || '') + pdfText;
+                } else {
+                    aiParts.unshift({ type: 'text', text: pdfText });
+                }
             }
+
+            // Format outputs
+            const hasImage = displayParts.some(p => p.type === 'image_url');
+            
+            const displayContent = hasImage 
+                ? displayParts 
+                : displayParts.map(p => p.text || '').join('');
+            
+            const aiContent = hasImage 
+                ? aiParts 
+                : aiParts.map(p => p.text || '').join('');
+
+            return { displayContent, aiContent };
         }
 
-        return message;
+        return { displayContent: message, aiContent: message };
     }
 
     async createSession(userId: number, title?: string) {
@@ -560,12 +581,12 @@ export class ChatService {
             this.logger.log(`[sendMessage] Message parts: ${JSON.stringify(userMessage.map(p => ({ type: p.type, hasImageUrl: !!p.image_url, hasPdf: !!p.pdf_data })))}`);
         }
 
-        // PDF ve diğer dosyaları işle
-        const processedMessage = await this.processMessageContent(userMessage);
-        this.logger.log(`[sendMessage] Processed message type: ${typeof processedMessage}, isArray: ${Array.isArray(processedMessage)}`);
+        // PDF ve diğer dosyaları işle - displayContent DB için, aiContent AI için
+        const { displayContent, aiContent } = await this.processMessageContent(userMessage);
+        this.logger.log(`[sendMessage] Display content type: ${typeof displayContent}, AI content type: ${typeof aiContent}`);
 
-        // Serialize array messages as JSON for database storage
-        const contentToStore = Array.isArray(processedMessage) ? JSON.stringify(processedMessage) : processedMessage;
+        // Serialize array messages as JSON for database storage (display content - PDF içeriği yok)
+        const contentToStore = Array.isArray(displayContent) ? JSON.stringify(displayContent) : displayContent;
 
         const [userMsg] = await this.db
             .insert(messages)
@@ -584,10 +605,10 @@ export class ChatService {
 
         if (messageCount.length === 1) {
             let titleText = '';
-            if (typeof processedMessage === 'string') {
-                titleText = processedMessage;
-            } else if (Array.isArray(processedMessage)) {
-                titleText = processedMessage
+            if (typeof displayContent === 'string') {
+                titleText = displayContent;
+            } else if (Array.isArray(displayContent)) {
+                titleText = displayContent
                     .filter((part: any) => part.type === 'text')
                     .map((part: any) => part.text || '')
                     .join(' ');
@@ -604,16 +625,16 @@ export class ChatService {
         }
 
         let messageText = '';
-        if (typeof processedMessage === 'string') {
-            messageText = processedMessage;
-        } else if (Array.isArray(processedMessage)) {
-            messageText = processedMessage
+        if (typeof aiContent === 'string') {
+            messageText = aiContent;
+        } else if (Array.isArray(aiContent)) {
+            messageText = aiContent
                 .filter((part: any) => part.type === 'text')
                 .map((part: any) => part.text || '')
                 .join(' ');
         }
 
-        if (mode === 'image' || this.isImageRequest(processedMessage)) {
+        if (mode === 'image' || this.isImageRequest(aiContent)) {
             const imageResponse = await this.handleImageRequest(
                 sessionId,
                 messageText || 'Generate an image',
@@ -758,12 +779,12 @@ export class ChatService {
             this.logger.log(`[sendMessageStream] Message parts: ${JSON.stringify(userMessage.map(p => ({ type: p.type, hasImageUrl: !!p.image_url, hasPdf: !!p.pdf_data })))}`);
         }
 
-        // PDF ve diğer dosyaları işle
-        const processedMessage = await this.processMessageContent(userMessage);
-        this.logger.log(`[sendMessageStream] Processed message type: ${typeof processedMessage}, isArray: ${Array.isArray(processedMessage)}`);
+        // PDF ve diğer dosyaları işle - displayContent DB için, aiContent AI için
+        const { displayContent, aiContent } = await this.processMessageContent(userMessage);
+        this.logger.log(`[sendMessageStream] Display content type: ${typeof displayContent}, AI content type: ${typeof aiContent}`);
 
-        // Serialize array messages as JSON for database storage
-        const contentToStore = Array.isArray(processedMessage) ? JSON.stringify(processedMessage) : processedMessage;
+        // Serialize array messages as JSON for database storage (display content - PDF içeriği yok)
+        const contentToStore = Array.isArray(displayContent) ? JSON.stringify(displayContent) : displayContent;
 
         const [userMsg] = await this.db
             .insert(messages)
@@ -775,19 +796,19 @@ export class ChatService {
             .returning();
 
         // ✅ İlk mesajda session title'ını otomatik güncelle
-        this.autoUpdateSessionTitle(sessionId, processedMessage);
+        this.autoUpdateSessionTitle(sessionId, displayContent);
 
         let messageText = '';
-        if (typeof processedMessage === 'string') {
-            messageText = processedMessage;
-        } else if (Array.isArray(processedMessage)) {
-            messageText = processedMessage
+        if (typeof aiContent === 'string') {
+            messageText = aiContent;
+        } else if (Array.isArray(aiContent)) {
+            messageText = aiContent
                 .filter((part: any) => part.type === 'text')
                 .map((part: any) => part.text || '')
                 .join(' ');
         }
 
-        if (mode === 'image' || this.isImageRequest(processedMessage)) {
+        if (mode === 'image' || this.isImageRequest(aiContent)) {
             const imageResponse = await this.handleImageRequest(
                 sessionId,
                 messageText || 'Generate an image',
@@ -1231,14 +1252,14 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
         assistantMessageId?: number;
         isNewSession: boolean;
     }> {
-        // PDF ve dosyaları işle
-        const processedMessage = await this.processMessageContent(userMessage);
+        // PDF ve dosyaları işle - displayContent DB için, aiContent AI için
+        const { displayContent, aiContent } = await this.processMessageContent(userMessage);
         
         let messageText = '';
-        if (typeof processedMessage === 'string') {
-            messageText = processedMessage;
-        } else if (Array.isArray(processedMessage)) {
-            messageText = processedMessage
+        if (typeof aiContent === 'string') {
+            messageText = aiContent;
+        } else if (Array.isArray(aiContent)) {
+            messageText = aiContent
                 .filter((part: any) => part.type === 'text')
                 .map((part: any) => part.text || '')
                 .join(' ');
@@ -1247,9 +1268,9 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
         // ✅ ÖNCE AI yanıtını al (session oluşturmadan)
         let fullResponse = '';
         
-        // Chat mesajlarını hazırla (tek mesajlık geçmiş)
+        // Chat mesajlarını hazırla (tek mesajlık geçmiş) - AI content ile
         const chatMessages: ChatMessage[] = [
-            { role: 'user' as const, content: processedMessage }
+            { role: 'user' as const, content: aiContent as any }
         ];
 
         try {
@@ -1278,8 +1299,8 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
         const sessionId = newSession.id;
         this.logger.log(`[handleNewSessionWithAI] Created new session ${sessionId} after AI response`);
 
-        // Mesajları kaydet
-        const contentToStore = Array.isArray(processedMessage) ? JSON.stringify(processedMessage) : processedMessage;
+        // Mesajları kaydet - displayContent (PDF içeriği olmadan)
+        const contentToStore = Array.isArray(displayContent) ? JSON.stringify(displayContent) : displayContent;
 
         const [userMsg] = await this.db
             .insert(messages)
