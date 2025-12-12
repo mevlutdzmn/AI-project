@@ -4,12 +4,12 @@ import { AuthGuard } from '@nestjs/passport';
 
 @Controller()
 export class SearchController {
-  constructor(private searchAdapter: SearchAdapter) {}
+    constructor(private searchAdapter: SearchAdapter) { }
 
-  @Post('search')
-  @UseGuards(AuthGuard('jwt'))
-  async search(@Body() body: { query: string }) {
-    const result = await this.searchAdapter.search(body.query, 6);
-    return result;
-  }
+    @Post('search')
+    @UseGuards(AuthGuard('jwt'))
+    async search(@Body() body: { query: string }) {
+        const result = await this.searchAdapter.search(body.query, 6);
+        return result;
+    }
 }

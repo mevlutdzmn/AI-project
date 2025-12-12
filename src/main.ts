@@ -28,10 +28,7 @@ async function bootstrap() {
     .setTitle('AI Platform API')
     .setDescription('Chat and tools API documentation')
     .setVersion('1.0.0')
-    .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      'bearerAuth',
-    )
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearerAuth')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document, { jsonDocumentUrl: 'docs/json' });

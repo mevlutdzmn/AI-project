@@ -7,8 +7,8 @@ import { DatabaseModule } from '../database/database.module';
 import { MemoryModule } from '../memory/memory.module';
 
 @Module({
-  imports: [AIModule, UsersModule, DatabaseModule, MemoryModule],
-  controllers: [ChatController],
-  providers: [ChatService],
+    imports: [AIModule, UsersModule, DatabaseModule, MemoryModule],
+    controllers: [ChatController],
+    providers: [ChatService],
 })
-export class ChatModule {}
+export class ChatModule { }

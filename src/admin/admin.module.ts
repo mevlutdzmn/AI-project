@@ -6,8 +6,8 @@ import { PaymentsModule } from '../payments/payments.module';
 import { DatabaseModule } from '../database/database.module';
 
 @Module({
-  imports: [UsersModule, PaymentsModule, DatabaseModule],
-  controllers: [AdminController],
-  providers: [AdminService],
+    imports: [UsersModule, PaymentsModule, DatabaseModule],
+    controllers: [AdminController],
+    providers: [AdminService],
 })
-export class AdminModule {}
+export class AdminModule { }

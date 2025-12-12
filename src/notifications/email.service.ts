@@ -46,10 +46,7 @@ export class EmailService {
     return true;
   }
 
-  async sendPasswordResetEmail(
-    email: string,
-    resetLink: string,
-  ): Promise<boolean> {
+  async sendPasswordResetEmail(email: string, resetLink: string): Promise<boolean> {
     if (!this.transporter) {
       this.logger.log(`[DEV] Password reset link for ${email}: ${resetLink}`);
       return false;

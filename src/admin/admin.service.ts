@@ -8,296 +8,296 @@ import { PasswordHasher } from '../common/utils/password-hasher';
 
 @Injectable()
 export class AdminService {
-  constructor(@Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>) {}
+    constructor(
+        @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
+    ) { }
 
-  async getStats() {
-    const [totalUsers] = await this.db.select({ count: count() }).from(users);
-    const [activeUsers] = await this.db
-      .select({ count: count() })
-      .from(users)
-      .where(eq(users.active, true));
+    async getStats() {
+        const [totalUsers] = await this.db.select({ count: count() }).from(users);
+        const [activeUsers] = await this.db
+            .select({ count: count() })
+            .from(users)
+            .where(eq(users.active, true));
 
-    const [totalRevenue] = await this.db
-      .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
-      .from(payments)
-      .where(eq(payments.status, 'completed'));
+        const [totalRevenue] = await this.db
+            .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
+            .from(payments)
+            .where(eq(payments.status, 'completed'));
 
-    const [totalSessions] = await this.db
-      .select({ count: count() })
-      .from(sessions);
-    const [totalMessages] = await this.db
-      .select({ count: count() })
-      .from(messages);
+        const [totalSessions] = await this.db
+            .select({ count: count() })
+            .from(sessions);
+        const [totalMessages] = await this.db
+            .select({ count: count() })
+            .from(messages);
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const [recentRegistrations] = await this.db
-      .select({ count: count() })
-      .from(users)
-      .where(gte(users.createdAt, sevenDaysAgo));
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const [recentRegistrations] = await this.db
+            .select({ count: count() })
+            .from(users)
+            .where(gte(users.createdAt, sevenDaysAgo));
 
-    return {
-      totalUsers: totalUsers.count,
-      activeUsers: activeUsers.count,
-      totalRevenue: totalRevenue.total || 0,
-      totalSessions: totalSessions.count,
-      totalMessages: totalMessages.count,
-      recentRegistrations: recentRegistrations.count,
-    };
-  }
-
-  async getUsers(page: number = 1, limit: number = 10, search: string = '') {
-    const offset = (page - 1) * limit;
-    let usersList;
-
-    if (search) {
-      usersList = await this.db
-        .select()
-        .from(users)
-        .where(sql`${users.email} ILIKE ${`%${search}%`}`)
-        .limit(limit)
-        .offset(offset)
-        .orderBy(desc(users.createdAt));
-    } else {
-      usersList = await this.db
-        .select()
-        .from(users)
-        .limit(limit)
-        .offset(offset)
-        .orderBy(desc(users.createdAt));
+        return {
+            totalUsers: totalUsers.count,
+            activeUsers: activeUsers.count,
+            totalRevenue: totalRevenue.total || 0,
+            totalSessions: totalSessions.count,
+            totalMessages: totalMessages.count,
+            recentRegistrations: recentRegistrations.count,
+        };
     }
 
-    const [totalCount] = await this.db.select({ count: count() }).from(users);
+    async getUsers(page: number = 1, limit: number = 10, search: string = '') {
+        const offset = (page - 1) * limit;
+        let usersList;
 
-    // Remove passwords
-    const safeUsers = usersList.map(({ password, ...user }) => user);
+        if (search) {
+            usersList = await this.db
+                .select()
+                .from(users)
+                .where(sql`${users.email} ILIKE ${`%${search}%`}`)
+                .limit(limit)
+                .offset(offset)
+                .orderBy(desc(users.createdAt));
+        } else {
+            usersList = await this.db
+                .select()
+                .from(users)
+                .limit(limit)
+                .offset(offset)
+                .orderBy(desc(users.createdAt));
+        }
 
-    return {
-      users: safeUsers,
-      total: totalCount.count,
-      page,
-      limit,
-      totalPages: Math.ceil(totalCount.count / limit),
-    };
-  }
+        const [totalCount] = await this.db.select({ count: count() }).from(users);
 
-  async getUser(id: number) {
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
+        // Remove passwords
+        const safeUsers = usersList.map(({ password, ...user }) => user);
 
-    if (!user) {
-      return null;
+        return {
+            users: safeUsers,
+            total: totalCount.count,
+            page,
+            limit,
+            totalPages: Math.ceil(totalCount.count / limit),
+        };
     }
 
-    const { password, ...safeUser } = user;
-    return safeUser;
-  }
+    async getUser(id: number) {
+        const [user] = await this.db.select().from(users).where(eq(users.id, id));
 
-  async createUser(data: any) {
-    const { email, password, isAdmin = false, active = true } = data;
+        if (!user) {
+            return null;
+        }
 
-    const [existing] = await this.db
-      .select()
-      .from(users)
-      .where(eq(users.email, email));
-    if (existing) {
-      throw new Error('Email already exists');
+        const { password, ...safeUser } = user;
+        return safeUser;
     }
 
-    const hashedPassword = await PasswordHasher.hash(password);
+    async createUser(data: any) {
+        const { email, password, isAdmin = false, active = true } = data;
 
-    const subscriptionEnd = new Date();
-    subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
+        const [existing] = await this.db
+            .select()
+            .from(users)
+            .where(eq(users.email, email));
+        if (existing) {
+            throw new Error('Email already exists');
+        }
 
-    const [newUser] = await this.db
-      .insert(users)
-      .values({
-        email,
-        password: hashedPassword,
-        verified: true,
-        active,
-        isAdmin,
-        subscriptionExpiresAt: subscriptionEnd,
-      })
-      .returning();
+        const hashedPassword = await PasswordHasher.hash(password);
 
-    const { password: _, ...safeUser } = newUser;
-    return safeUser;
-  }
+        const subscriptionEnd = new Date();
+        subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
 
-  async updateUser(id: number, data: any) {
-    const updates: any = {};
+        const [newUser] = await this.db
+            .insert(users)
+            .values({
+                email,
+                password: hashedPassword,
+                verified: true,
+                active,
+                isAdmin,
+                subscriptionExpiresAt: subscriptionEnd,
+            })
+            .returning();
 
-    if (data.email) updates.email = data.email;
-    if (data.password) {
-      updates.password = await PasswordHasher.hash(data.password);
-    }
-    if (data.active !== undefined) updates.active = data.active;
-    if (data.isAdmin !== undefined) updates.isAdmin = data.isAdmin;
-
-    if (data.isPremium !== undefined) {
-      updates.isPremium = data.isPremium;
-
-      if (data.isPremium) {
-        const days = data.premiumDays || 30;
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + days);
-        updates.subscriptionExpiresAt = expiryDate;
-      } else {
-        updates.subscriptionExpiresAt = null;
-      }
+        const { password: _, ...safeUser } = newUser;
+        return safeUser;
     }
 
-    if (data.subscriptionExpiresAt) {
-      updates.subscriptionExpiresAt = new Date(data.subscriptionExpiresAt);
+    async updateUser(id: number, data: any) {
+        const updates: any = {};
+
+        if (data.email) updates.email = data.email;
+        if (data.password) {
+            updates.password = await PasswordHasher.hash(data.password);
+        }
+        if (data.active !== undefined) updates.active = data.active;
+        if (data.isAdmin !== undefined) updates.isAdmin = data.isAdmin;
+
+        if (data.isPremium !== undefined) {
+            updates.isPremium = data.isPremium;
+
+            if (data.isPremium) {
+                const days = data.premiumDays || 30;
+                const expiryDate = new Date();
+                expiryDate.setDate(expiryDate.getDate() + days);
+                updates.subscriptionExpiresAt = expiryDate;
+            } else {
+                updates.subscriptionExpiresAt = null;
+            }
+        }
+
+        if (data.subscriptionExpiresAt) {
+            updates.subscriptionExpiresAt = new Date(data.subscriptionExpiresAt);
+        }
+
+        const [updatedUser] = await this.db
+            .update(users)
+            .set(updates)
+            .where(eq(users.id, id))
+            .returning();
+
+        if (!updatedUser) {
+            return null;
+        }
+
+        const { password, ...safeUser } = updatedUser;
+        return safeUser;
     }
 
-    const [updatedUser] = await this.db
-      .update(users)
-      .set(updates)
-      .where(eq(users.id, id))
-      .returning();
+    async deleteUser(id: number, currentUserId: number) {
+        if (currentUserId === id) {
+            throw new Error('Cannot delete your own account');
+        }
 
-    if (!updatedUser) {
-      return null;
+        const [deleted] = await this.db
+            .delete(users)
+            .where(eq(users.id, id))
+            .returning();
+
+        return deleted;
     }
 
-    const { password, ...safeUser } = updatedUser;
-    return safeUser;
-  }
+    async getPayments(page: number = 1, limit: number = 20, status?: string) {
+        const offset = (page - 1) * limit;
+        let paymentsList;
 
-  async deleteUser(id: number, currentUserId: number) {
-    if (currentUserId === id) {
-      throw new Error('Cannot delete your own account');
+        const query = this.db
+            .select({
+                id: payments.id,
+                userId: payments.userId,
+                amount: payments.amount,
+                status: payments.status,
+                createdAt: payments.createdAt,
+                email: users.email,
+            })
+            .from(payments)
+            .leftJoin(users, eq(payments.userId, users.id))
+            .limit(limit)
+            .offset(offset)
+            .orderBy(desc(payments.createdAt));
+
+        if (status) {
+            query.where(eq(payments.status, status));
+        }
+
+        paymentsList = await query;
+
+        const [totalCount] = await this.db.select({ count: count() }).from(payments);
+
+        return {
+            payments: paymentsList,
+            total: totalCount.count,
+            page,
+            limit,
+            totalPages: Math.ceil(totalCount.count / limit),
+        };
     }
 
-    const [deleted] = await this.db
-      .delete(users)
-      .where(eq(users.id, id))
-      .returning();
+    async getSessions(userId?: number, limit: number = 100) {
+        const query = this.db
+            .select({
+                id: sessions.id,
+                userId: sessions.userId,
+                title: sessions.title,
+                createdAt: sessions.createdAt,
+                updatedAt: sessions.updatedAt,
+                userEmail: users.email,
+            })
+            .from(sessions)
+            .leftJoin(users, eq(sessions.userId, users.id))
+            .limit(limit)
+            .orderBy(desc(sessions.updatedAt));
 
-    return deleted;
-  }
+        if (userId) {
+            query.where(eq(sessions.userId, userId));
+        }
 
-  async getPayments(page: number = 1, limit: number = 20, status?: string) {
-    const offset = (page - 1) * limit;
-    let paymentsList;
+        const sessionsList = await query;
 
-    const query = this.db
-      .select({
-        id: payments.id,
-        userId: payments.userId,
-        amount: payments.amount,
-        status: payments.status,
-        createdAt: payments.createdAt,
-        email: users.email,
-      })
-      .from(payments)
-      .leftJoin(users, eq(payments.userId, users.id))
-      .limit(limit)
-      .offset(offset)
-      .orderBy(desc(payments.createdAt));
-
-    if (status) {
-      query.where(eq(payments.status, status));
+        return {
+            success: true,
+            sessions: sessionsList,
+            count: sessionsList.length,
+        };
     }
 
-    paymentsList = await query;
+    async getMessages(
+        page: number = 1,
+        limit: number = 50,
+        userId?: number,
+        sessionId?: string,
+    ) {
+        const offset = (page - 1) * limit;
+        let messagesList;
+        let countQuery;
 
-    const [totalCount] = await this.db
-      .select({ count: count() })
-      .from(payments);
+        const baseQuery = this.db
+            .select({
+                id: messages.id,
+                sessionId: messages.sessionId,
+                role: messages.role,
+                content: messages.content,
+                createdAt: messages.createdAt,
+                userId: sessions.userId,
+                userEmail: users.email,
+                sessionTitle: sessions.title,
+            })
+            .from(messages)
+            .leftJoin(sessions, eq(messages.sessionId, sessions.id))
+            .leftJoin(users, eq(sessions.userId, users.id))
+            .limit(limit)
+            .offset(offset)
+            .orderBy(desc(messages.createdAt));
 
-    return {
-      payments: paymentsList,
-      total: totalCount.count,
-      page,
-      limit,
-      totalPages: Math.ceil(totalCount.count / limit),
-    };
-  }
+        if (userId) {
+            baseQuery.where(eq(sessions.userId, userId));
+            countQuery = this.db
+                .select({ count: count() })
+                .from(messages)
+                .leftJoin(sessions, eq(messages.sessionId, sessions.id))
+                .where(eq(sessions.userId, userId));
+        } else if (sessionId) {
+            baseQuery.where(eq(messages.sessionId, sessionId));
+            countQuery = this.db
+                .select({ count: count() })
+                .from(messages)
+                .where(eq(messages.sessionId, sessionId));
+        } else {
+            countQuery = this.db.select({ count: count() }).from(messages);
+        }
 
-  async getSessions(userId?: number, limit: number = 100) {
-    const query = this.db
-      .select({
-        id: sessions.id,
-        userId: sessions.userId,
-        title: sessions.title,
-        createdAt: sessions.createdAt,
-        updatedAt: sessions.updatedAt,
-        userEmail: users.email,
-      })
-      .from(sessions)
-      .leftJoin(users, eq(sessions.userId, users.id))
-      .limit(limit)
-      .orderBy(desc(sessions.updatedAt));
+        messagesList = await baseQuery;
+        const [total] = await countQuery;
 
-    if (userId) {
-      query.where(eq(sessions.userId, userId));
+        return {
+            messages: messagesList,
+            total: total.count,
+            page,
+            limit,
+            totalPages: Math.ceil(total.count / limit),
+        };
     }
-
-    const sessionsList = await query;
-
-    return {
-      success: true,
-      sessions: sessionsList,
-      count: sessionsList.length,
-    };
-  }
-
-  async getMessages(
-    page: number = 1,
-    limit: number = 50,
-    userId?: number,
-    sessionId?: string,
-  ) {
-    const offset = (page - 1) * limit;
-    let messagesList;
-    let countQuery;
-
-    const baseQuery = this.db
-      .select({
-        id: messages.id,
-        sessionId: messages.sessionId,
-        role: messages.role,
-        content: messages.content,
-        createdAt: messages.createdAt,
-        userId: sessions.userId,
-        userEmail: users.email,
-        sessionTitle: sessions.title,
-      })
-      .from(messages)
-      .leftJoin(sessions, eq(messages.sessionId, sessions.id))
-      .leftJoin(users, eq(sessions.userId, users.id))
-      .limit(limit)
-      .offset(offset)
-      .orderBy(desc(messages.createdAt));
-
-    if (userId) {
-      baseQuery.where(eq(sessions.userId, userId));
-      countQuery = this.db
-        .select({ count: count() })
-        .from(messages)
-        .leftJoin(sessions, eq(messages.sessionId, sessions.id))
-        .where(eq(sessions.userId, userId));
-    } else if (sessionId) {
-      baseQuery.where(eq(messages.sessionId, sessionId));
-      countQuery = this.db
-        .select({ count: count() })
-        .from(messages)
-        .where(eq(messages.sessionId, sessionId));
-    } else {
-      countQuery = this.db.select({ count: count() }).from(messages);
-    }
-
-    messagesList = await baseQuery;
-    const [total] = await countQuery;
-
-    return {
-      messages: messagesList,
-      total: total.count,
-      page,
-      limit,
-      totalPages: Math.ceil(total.count / limit),
-    };
-  }
 }

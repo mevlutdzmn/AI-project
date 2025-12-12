@@ -29,13 +29,13 @@ export class ShareController {
   async createShare(
     @Param('sessionId') sessionId: string,
     @Request() req,
-    @Query('expiresInDays') expiresInDays?: string,
+    @Query('expiresInDays') expiresInDays?: string
   ) {
     const userId = req.user.sub || req.user.id;
     return this.shareService.createShareLink(
       sessionId,
       userId,
-      expiresInDays ? parseInt(expiresInDays) : undefined,
+      expiresInDays ? parseInt(expiresInDays) : undefined
     );
   }
 
@@ -64,19 +64,13 @@ export class ShareController {
   async exportMarkdown(
     @Param('sessionId') sessionId: string,
     @Request() req,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     const userId = req.user.sub || req.user.id;
-    const markdown = await this.shareService.exportToMarkdown(
-      sessionId,
-      userId,
-    );
-
+    const markdown = await this.shareService.exportToMarkdown(sessionId, userId);
+    
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="chat-export.md"',
-    );
+    res.setHeader('Content-Disposition', 'attachment; filename="chat-export.md"');
     res.send(markdown);
   }
 
@@ -88,16 +82,13 @@ export class ShareController {
   async exportJson(
     @Param('sessionId') sessionId: string,
     @Request() req,
-    @Res() res: Response,
+    @Res() res: Response
   ) {
     const userId = req.user.sub || req.user.id;
     const json = await this.shareService.exportToJson(sessionId, userId);
-
+    
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="chat-export.json"',
-    );
+    res.setHeader('Content-Disposition', 'attachment; filename="chat-export.json"');
     res.send(JSON.stringify(json, null, 2));
   }
 

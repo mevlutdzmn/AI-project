@@ -14,18 +14,18 @@ export class RealtimeController {
   @Post('session')
   async createSession(@Req() req: Request, @Res() res: Response) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-
+    
     if (!apiKey) {
       console.error('[realtime] Missing OPENAI_API_KEY');
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        error: 'Missing server OPENAI_API_KEY',
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ 
+        error: 'Missing server OPENAI_API_KEY' 
       });
     }
 
     try {
       const contentType = req.headers['content-type'] || 'application/json';
       let bodyText: string;
-
+      
       if (typeof req.body === 'string') {
         bodyText = req.body;
       } else if (Buffer.isBuffer(req.body)) {
@@ -37,11 +37,11 @@ export class RealtimeController {
       console.log('[realtime] Creating session, body_len:', bodyText.length);
 
       const openaiUrl = 'https://api.openai.com/v1/realtime/calls';
-
+      
       // Session configuration - çok dilli destek
       const sessionConfig = {
-        type: 'realtime',
-        model: 'gpt-4o-realtime-preview',
+        type: "realtime",
+        model: "gpt-4o-realtime-preview",
         instructions: `You are a multilingual voice assistant. Your PRIMARY RULE is to ALWAYS respond in the EXACT SAME LANGUAGE the user speaks.
 
 LANGUAGE MATCHING - THIS IS YOUR MOST IMPORTANT RULE:
@@ -64,9 +64,9 @@ RULES:
 3. NEVER default to any specific language - MATCH THE USER'S LANGUAGE`,
         audio: {
           output: {
-            voice: 'alloy',
-          },
-        },
+            voice: "alloy"
+          }
+        }
       };
 
       // SDP'yi parse et
@@ -83,9 +83,8 @@ RULES:
       }
 
       // Multipart form-data oluştur (manuel)
-      const boundary =
-        '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-
+      const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+      
       let formBody = '';
       formBody += `--${boundary}\r\n`;
       formBody += `Content-Disposition: form-data; name="sdp"\r\n\r\n`;
@@ -100,7 +99,7 @@ RULES:
       const response = await fetch(openaiUrl, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
         },
         body: formBody,
@@ -109,10 +108,7 @@ RULES:
       const respText = await response.text();
       console.log('[realtime] OpenAI response status:', response.status);
       if (response.status !== 200 && response.status !== 201) {
-        console.log(
-          '[realtime] OpenAI error response:',
-          respText.substring(0, 500),
-        );
+        console.log('[realtime] OpenAI error response:', respText.substring(0, 500));
       }
 
       // Headers'ı kopyala
