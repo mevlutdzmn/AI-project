@@ -142,7 +142,7 @@ export class OpenAIAdapter {
             }
 
             if (model.startsWith('gpt-5')) {
-                // ✅ GPT-5.1 - önce "düşünüyor" göster, sonra yanıtı al
+                // ✅ GPT-5.2 - önce "düşünüyor" göster, sonra yanıtı al
                 // Bu kullanıcıya anında geri bildirim verir
                 this.logger.log(`[OpenAI] Starting GPT-5 request for model: ${model}`);
                 
@@ -237,23 +237,23 @@ export class OpenAIAdapter {
     }
 
     // ------------------------------
-    // GPT-5.1 — RESPONSES API
+    // GPT-5.2 — RESPONSES API
     // ------------------------------
     private getReasoningEffort(
         model: string,
     ): 'minimal' | 'low' | 'medium' | 'high' | undefined {
         // Map frontend model IDs to reasoning effort levels
-        if (model === 'gpt-5.1-instant') {
+        if (model === 'gpt-5.2-instant') {
             return 'minimal'; // Fastest response
         }
-        if (model === 'gpt-5.1-auto' || model === 'gpt-5.1') {
+        if (model === 'gpt-5.2-auto' || model === 'gpt-5.2') {
             return 'medium'; // Balanced
         }
-        if (model === 'gpt-5.1-thinking') {
+        if (model === 'gpt-5.2-thinking') {
             return 'high'; // Deep reasoning
         }
         // GPT-5 Pro doesn't use reasoning effort parameter
-        if (model === 'gpt-5-pro') {
+        if (model === 'gpt-5.2-pro') {
             return undefined;
         }
         // Default for base gpt-5
@@ -265,10 +265,10 @@ export class OpenAIAdapter {
 
     private getBaseModel(model: string): string {
         // Map frontend model IDs to actual OpenAI model names
-        if (model.startsWith('gpt-5.1')) {
+        if (model.startsWith('gpt-5.2')) {
             return 'gpt-5';
         }
-        if (model === 'gpt-5-pro') {
+        if (model === 'gpt-5.2-pro') {
             return 'gpt-5-pro';
         }
         if (model === 'gpt-5') {
@@ -279,7 +279,7 @@ export class OpenAIAdapter {
 
     private async chatGPT5(
         messages: ChatMessage[],
-        model: string = 'gpt-5.1',
+        model: string = 'gpt-5.2',
         mode?: string,
     ) {
         if (!this.client) {
