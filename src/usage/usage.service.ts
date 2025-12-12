@@ -11,7 +11,7 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gpt-5.1-auto': { input: 0.01, output: 0.03 },
   'gpt-5.1-instant': { input: 0.005, output: 0.015 },
   'gpt-5.1-thinking': { input: 0.02, output: 0.06 },
-  'gpt-5-pro': { input: 0.03, output: 0.09 },
+  'gpt-5.1-pro': { input: 0.03, output: 0.09 },
 };
 
 @Injectable()
