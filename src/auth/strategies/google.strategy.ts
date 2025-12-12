@@ -12,7 +12,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     // Use production URL on Vercel, otherwise use environment variable or fallback to localhost
     const backendUrl = isVercel 
       ? 'https://nestjs-back-kohl.vercel.app/api/v1'
-      : (configService.get<string>('BACKEND_URL') || 'http://localhost:4001/api/v1');
+      : (configService.get<string>('BACKEND_URL') || 'http://localhost:4000/api/v1');
     
     const callbackURL = `${backendUrl}/auth/google/callback`;
     

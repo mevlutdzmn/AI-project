@@ -102,7 +102,7 @@ export class UploadController {
             }
         } else {
             // Local development - file is already saved to disk
-            fileUrl = `${process.env.BACKEND_URL || 'http://localhost:3001'}/uploads/${file.filename}`;
+            fileUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/${file.filename}`;
         }
 
         // Check if it's a text-based file and read its content
@@ -227,7 +227,7 @@ export class UploadController {
                 }
                 const filePath = `${dest}/${fileName}`;
                 fs.writeFileSync(filePath, buffer);
-                savedUrl = `${process.env.BACKEND_URL || 'http://localhost:3001'}/uploads/${fileName}`;
+                savedUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/${fileName}`;
             }
 
             return {
