@@ -299,11 +299,12 @@ export class AuthService {
         const resetToken = crypto.randomBytes(32).toString('hex');
         const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-        // Save token to database
+        // Save hashed token to database (avoid storing raw token)
+        const hashedResetToken = require('crypto').createHash('sha256').update(resetToken).digest('hex');
         await this.db
             .update(users)
             .set({ 
-                resetToken, 
+                resetToken: hashedResetToken, 
                 resetTokenExpiry 
             })
             .where(eq(users.id, user.id));
@@ -322,10 +323,11 @@ export class AuthService {
 
     async resetPassword(token: string, newPassword: string) {
         // Find user by reset token
+        const hashedToken = require('crypto').createHash('sha256').update(token).digest('hex');
         const [user] = await this.db
             .select()
             .from(users)
-            .where(eq(users.resetToken, token));
+            .where(eq(users.resetToken, hashedToken));
 
         if (!user) {
             throw new Error('لینک بازیابی نامعتبر یا منقضی شده است.');

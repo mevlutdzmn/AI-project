@@ -169,11 +169,38 @@ export class UploadController {
         }
 
         try {
+            // Basic validation: only allow http/https
+            const urlObj = new URL(imageUrl);
+            if (!['http:', 'https:'].includes(urlObj.protocol)) {
+                throw new HttpException('Invalid URL protocol', HttpStatus.BAD_REQUEST);
+            }
+
+            // Prevent SSRF to private networks/localhost
+            const hostname = urlObj.hostname.toLowerCase();
+            const privateHosts = ['localhost', '127.0.0.1'];
+            const privateCidrs = [/^10\./, /^192\.168\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^169\.254\./];
+            if (privateHosts.includes(hostname) || privateCidrs.some((re) => re.test(hostname))) {
+                throw new HttpException('Blocked private network access', HttpStatus.BAD_REQUEST);
+            }
+
             // Download image from URL
             const response = await axios.get(imageUrl, {
                 responseType: 'arraybuffer',
                 timeout: 30000,
+                // Ensure we only accept images
+                headers: { Accept: 'image/*' },
             });
+
+            const contentType = response.headers['content-type'] || '';
+            if (!contentType.startsWith('image/')) {
+                throw new HttpException('URL is not an image', HttpStatus.BAD_REQUEST);
+            }
+
+            // Enforce max size (10MB)
+            const contentLength = parseInt(response.headers['content-length'] || '0', 10);
+            if (contentLength && contentLength > 10 * 1024 * 1024) {
+                throw new HttpException('Image too large', HttpStatus.BAD_REQUEST);
+            }
 
             const buffer = Buffer.from(response.data);
             const randomName = Array(32)

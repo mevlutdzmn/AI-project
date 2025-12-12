@@ -256,8 +256,8 @@ export class OpenAIAdapter {
         if (model === 'gpt-5.2-pro') {
             return undefined;
         }
-        // Default for base gpt-5
-        if (model === 'gpt-5') {
+        // Default
+        if (model === 'gpt-5.2') {
             return 'medium';
         }
         return undefined;
@@ -265,14 +265,11 @@ export class OpenAIAdapter {
 
     private getBaseModel(model: string): string {
         // Map frontend model IDs to actual OpenAI model names
-        if (model.startsWith('gpt-5.2')) {
-            return 'gpt-5';
+        if (model === 'gpt-5.2-auto' || model === 'gpt-5.2-instant' || model === 'gpt-5.2-thinking' || model === 'gpt-5.2') {
+            return 'gpt-5.2';
         }
         if (model === 'gpt-5.2-pro') {
-            return 'gpt-5-pro';
-        }
-        if (model === 'gpt-5') {
-            return 'gpt-5';
+            return 'gpt-5.2-pro';
         }
         return model;
     }
