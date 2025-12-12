@@ -13,7 +13,11 @@ export class ShareService {
   ) {}
 
   // ✅ Create share link
-  async createShareLink(sessionId: string, userId: number, expiresInDays?: number) {
+  async createShareLink(
+    sessionId: string,
+    userId: number,
+    expiresInDays?: number,
+  ) {
     // Verify session belongs to user
     const session = await this.db
       .select()
@@ -129,7 +133,9 @@ export class ShareService {
       throw new NotFoundException('Share not found');
     }
 
-    await this.db.delete(schema.sharedChats).where(eq(schema.sharedChats.shareToken, shareToken));
+    await this.db
+      .delete(schema.sharedChats)
+      .where(eq(schema.sharedChats.shareToken, shareToken));
     return { success: true };
   }
 
@@ -156,8 +162,13 @@ export class ShareService {
 
     chatMessages.forEach((msg) => {
       const role = msg.role === 'user' ? '👤 **You**' : '🤖 **Assistant**';
-      const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : '';
-      const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      const time = msg.createdAt
+        ? new Date(msg.createdAt).toLocaleTimeString()
+        : '';
+      const content =
+        typeof msg.content === 'string'
+          ? msg.content
+          : JSON.stringify(msg.content);
       markdown += `### ${role} - ${time}\n\n${content}\n\n---\n\n`;
     });
 
@@ -197,7 +208,7 @@ export class ShareService {
   // ✅ Share single message
   async shareMessage(content: string, userId?: number) {
     const shareToken = randomBytes(16).toString('hex');
-    
+
     const [result] = await this.db
       .insert(schema.sharedMessages)
       .values({

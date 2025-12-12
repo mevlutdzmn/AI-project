@@ -32,10 +32,15 @@ export class MemoryController {
   @ApiOperation({ summary: 'Add or update a memory' })
   async setMemory(
     @Request() req,
-    @Body() body: { key: string; value: string; category?: string }
+    @Body() body: { key: string; value: string; category?: string },
   ) {
     const userId = req.user.sub || req.user.id;
-    return this.memoryService.setMemory(userId, body.key, body.value, body.category);
+    return this.memoryService.setMemory(
+      userId,
+      body.key,
+      body.value,
+      body.category,
+    );
   }
 
   // ✅ Delete specific memory
@@ -69,14 +74,15 @@ export class MemoryController {
   @ApiOperation({ summary: 'Set custom instructions for current user' })
   async setInstructions(
     @Request() req,
-    @Body() body: { aboutUser?: string; responseStyle?: string; enabled?: boolean }
+    @Body()
+    body: { aboutUser?: string; responseStyle?: string; enabled?: boolean },
   ) {
     const userId = req.user.sub || req.user.id;
     return this.memoryService.setCustomInstructions(
       userId,
       body.aboutUser || null,
       body.responseStyle || null,
-      body.enabled ?? true
+      body.enabled ?? true,
     );
   }
 }

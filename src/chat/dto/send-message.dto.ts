@@ -1,11 +1,12 @@
 import { IsOptional, IsString, IsNotEmpty } from 'class-validator';
 
 export class SendMessageDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  sessionId: string;
+  sessionId?: string;
 
   // message can be string or structured array; keep as any for now
+  @IsNotEmpty()
   message: any;
 
   @IsOptional()

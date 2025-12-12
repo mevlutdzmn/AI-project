@@ -16,8 +16,15 @@ async function runMigration() {
     const sqlClient = postgres(dbUrl, { prepare: false });
     const db = drizzle(sqlClient);
 
-    const fallback = path.join(process.cwd(), '..', 'goo_ai_back-main', 'migrations', 'FINAL_MIGRATION.sql');
-    const migrationPath = process.env.MIGRATION_PATH || process.argv[2] || fallback;
+    const fallback = path.join(
+      process.cwd(),
+      '..',
+      'goo_ai_back-main',
+      'migrations',
+      'FINAL_MIGRATION.sql',
+    );
+    const migrationPath =
+      process.env.MIGRATION_PATH || process.argv[2] || fallback;
 
     if (!fs.existsSync(migrationPath)) {
       throw new Error(`Migration file not found at: ${migrationPath}`);
