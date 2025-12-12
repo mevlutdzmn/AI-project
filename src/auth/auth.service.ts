@@ -376,10 +376,17 @@ export class AuthService {
                 verified: true,
                 active: true,
                 isPremium: false,
+                isAdmin: false, // ✅ Yeni kullanıcı için isAdmin set et
             }).returning();
             user = newUser;
         }
-        const payload = { userId: user.id, email: user.email, isAdmin: user.isAdmin };
+        // ✅ isAdmin ve isPremium değerlerini boolean olarak garanti et
+        const payload = { 
+            userId: user.id, 
+            email: user.email, 
+            isAdmin: user.isAdmin ?? false,
+            isPremium: user.isPremium ?? false,
+        };
         return this.jwtService.sign(payload);
     }
 }
