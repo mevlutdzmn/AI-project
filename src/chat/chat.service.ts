@@ -289,7 +289,7 @@ export class ChatService {
         return false;
     }
 
-    // PDF'den metin çıkarma
+    // PDF'den metin çıkarma - tablo yapısını koruyarak
     private async extractPdfText(base64Data: string): Promise<string> {
         try {
             // data:application/pdf;base64, kısmını kaldır
@@ -299,9 +299,43 @@ export class ChatService {
             // pdf-parse v1.x - simple function call
             // eslint-disable-next-line @typescript-eslint/no-var-requires
             const pdfParse = require('pdf-parse');
-            const data = await pdfParse(buffer);
-            this.logger.log(`[PDF] Extracted ${data.text.length} characters from PDF`);
-            return data.text;
+            
+            // Özel render fonksiyonu - sayfa düzenini korur
+            const renderPage = (pageData: any) => {
+                const renderOptions = {
+                    normalizeWhitespace: false,
+                    disableCombineTextItems: false,
+                };
+                return pageData.getTextContent(renderOptions).then((textContent: any) => {
+                    let lastY: number | null = null;
+                    let text = '';
+                    
+                    for (const item of textContent.items) {
+                        if (lastY !== null && Math.abs(lastY - item.transform[5]) > 5) {
+                            // Yeni satır - Y pozisyonu değişti
+                            text += '\n';
+                        } else if (lastY !== null) {
+                            // Aynı satırda - tab ile ayır
+                            text += '\t';
+                        }
+                        text += item.str;
+                        lastY = item.transform[5];
+                    }
+                    return text;
+                });
+            };
+            
+            const data = await pdfParse(buffer, { pagerender: renderPage });
+            
+            // Boş satırları temizle ve formatla
+            const cleanedText = data.text
+                .split('\n')
+                .map((line: string) => line.trim())
+                .filter((line: string) => line.length > 0)
+                .join('\n');
+            
+            this.logger.log(`[PDF] Extracted ${cleanedText.length} characters from PDF`);
+            return cleanedText;
         } catch (error) {
             this.logger.error('[PDF] Error extracting text:', error);
             return '[PDF içeriği okunamadı]';
@@ -1295,10 +1329,10 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
         }
 
         const PREMIUM_MODELS = [
-            'gpt-5.1-auto',
-            'gpt-5.1-instant',
-            'gpt-5.1-thinking',
-            'gpt-5.1-pro',
+            'gpt-5.2-auto',
+            'gpt-5.2-instant',
+            'gpt-5.2-thinking',
+            'gpt-5.2-pro',
             'gpt-4-turbo',
         ];
 
