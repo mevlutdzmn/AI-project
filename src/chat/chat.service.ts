@@ -1114,7 +1114,7 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
             if (!session) return;
             
             // Eğer title zaten özelleştirilmişse (default değilse) güncelleme
-            const defaultTitles = ['New Chat', 'Yeni Sohbet', ''];
+            const defaultTitles = ['New Chat', 'Yeni Sohbet', 'گفتگوی جدید', ''];
             if (session.title && !defaultTitles.includes(session.title.trim())) {
                 return; // Zaten özel bir title var
             }
@@ -1361,7 +1361,7 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
             .insert(sessions)
             .values({
                 userId,
-                title: 'Yeni Sohbet', // Geçici title, AI ile güncellenecek
+                title: 'گفتگوی جدید', // Geçici title (Farsi), AI ile güncellenecek
             })
             .returning();
 
