@@ -17,6 +17,7 @@ export const messages = pgTable("messages", {
     role: text("role").notNull(), // 'user', 'assistant', 'system', 'function', 'tool'
     content: jsonb("content").notNull(), // Supports string or array of content parts
     model: text("model"), // GPT model used (e.g., 'gpt-5.2-auto', 'gpt-4o')
+    inputType: text("input_type").default("text"), // 'text', 'voice', 'image' - ChatGPT-style tracking
     toolCalls: jsonb("tool_calls"), // Array of tool calls
     toolCallId: text("tool_call_id"), // For tool response messages
     createdAt: timestamp("created_at").notNull().defaultNow(),

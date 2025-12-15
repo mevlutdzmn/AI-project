@@ -109,6 +109,30 @@ export class ChatController {
         );
     }
 
+    // ✅ ChatGPT-style: Save voice transcript as message (no AI call - Realtime API handles response)
+    @Post('messages/voice')
+    @ApiOperation({ summary: 'Save voice transcript as chat message' })
+    @ApiResponse({ status: 201, description: 'Voice message saved' })
+    async saveVoiceMessage(
+        @Req() req,
+        @Body() body: { sessionId: string; content: string; role: 'user' | 'assistant' },
+    ) {
+        const { sessionId, content, role } = body;
+        
+        if (!sessionId || !content || !role) {
+            return { success: false, message: 'Missing required fields' };
+        }
+
+        const messageId = await this.chatService.saveVoiceMessage(
+            sessionId,
+            req.user.id,
+            content,
+            role,
+        );
+
+        return { success: true, messageId };
+    }
+
     @Post('messages/stream')
     @SkipThrottle()
     @ApiOperation({ summary: 'Send message to AI with SSE streaming' })

@@ -12,10 +12,27 @@ const compress = (compression as any).default || compression;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Security: restrict CORS to known frontend origin and enable credentials
-  const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
+  // Security: restrict CORS to known frontend origins and enable credentials
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://www.goopay.ai',
+    'https://goopay.ai',
+    'https://gooai-front.vercel.app',
+    process.env.FRONTEND_URL,
+  ].filter(Boolean) as string[];
+  
   app.enableCors({
-    origin: [frontendOrigin],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        callback(null, false);
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

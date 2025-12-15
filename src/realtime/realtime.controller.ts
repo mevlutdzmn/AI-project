@@ -39,31 +39,33 @@ export class RealtimeController {
 
       const openaiUrl = 'https://api.openai.com/v1/realtime/calls';
       
-      // Session configuration - çok dilli destek
+      // Session configuration - çok dilli destek + transcription
       const sessionConfig = {
         type: "realtime",
         model: "gpt-4o-realtime-preview",
-        instructions: `You are a multilingual voice assistant. Your PRIMARY RULE is to ALWAYS respond in the EXACT SAME LANGUAGE the user speaks.
-
-LANGUAGE MATCHING - THIS IS YOUR MOST IMPORTANT RULE:
-1. Listen carefully to the user's language
-2. Identify the language they are speaking
-3. Respond ONLY in that SAME language
-4. NEVER switch to a different language
-
-LANGUAGE EXAMPLES:
-- If user speaks PERSIAN/FARSI (سلام، خوبی، چطوری) → respond in PERSIAN
-- If user speaks TURKISH (Merhaba, Selam, Nasılsın) → respond in TURKISH
-- If user speaks ENGLISH (Hello, Hi, How are you) → respond in ENGLISH
-- If user speaks ARABIC (مرحبا، كيف حالك) → respond in ARABIC
-- If user speaks GERMAN (Hallo, Guten Tag) → respond in GERMAN
-- If user speaks FRENCH (Bonjour, Salut) → respond in FRENCH
-
-RULES:
-1. Keep responses short (1-2 sentences)
-2. Be natural and friendly
-3. NEVER default to any specific language - MATCH THE USER'S LANGUAGE`,
+        instructions: `You are a multilingual voice assistant. CRITICAL RULES:
+1. ALWAYS respond in the EXACT SAME LANGUAGE the user speaks
+2. Turkish (Merhaba, Nasılsın) → respond in Turkish
+3. Persian/Farsi (سلام، چطوری) → respond in Persian  
+4. English (Hello, Hi) → respond in English
+5. Keep responses SHORT (1-2 sentences max)
+6. Be friendly and conversational
+7. NEVER switch languages - match the user's language exactly`,
+        // ✅ Yeni API formatı - audio içinde transcription ve turn_detection
         audio: {
+          input: {
+            // ✅ Transcription - kullanıcının söylediklerini yazıya dök
+            transcription: {
+              model: "whisper-1"
+            },
+            // ✅ Turn detection - konuşma algılama (server VAD)
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500
+            }
+          },
           output: {
             voice: "alloy"
           }

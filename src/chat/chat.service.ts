@@ -595,6 +595,36 @@ export class ChatService {
         return history.reverse();
     }
 
+    /**
+     * ✅ ChatGPT-style: Save voice transcript as message
+     * Used by Realtime Voice API - no AI call needed (Realtime handles response)
+     */
+    async saveVoiceMessage(
+        sessionId: string,
+        userId: number,
+        content: string,
+        role: 'user' | 'assistant',
+    ): Promise<number> {
+        await this.ensureSessionOwnership(sessionId, userId);
+
+        const [saved] = await this.db
+            .insert(messages)
+            .values({
+                sessionId,
+                role,
+                content,
+                inputType: 'voice', // ✅ Mark as voice message
+                model: 'gpt-4o-realtime', // Realtime API model
+            })
+            .returning({ id: messages.id });
+
+        // Touch session to update timestamp
+        await this.touchSession(sessionId);
+
+        this.logger.debug(`Voice message saved: ${saved.id} (${role})`);
+        return saved.id;
+    }
+
     async sendMessage(
         sessionId: string,
         userId: number,
