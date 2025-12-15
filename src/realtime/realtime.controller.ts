@@ -58,9 +58,10 @@ LANGUAGE PRIORITY: Persian > Turkish > English`,
         // ✅ ChatGPT-style audio config - gürültü yönetimi için optimize
         audio: {
           input: {
-            // ✅ Transcription - kullanıcının söylediklerini yazıya dök
+            // ✅ gpt-4o-transcribe = STREAMING partial results (kelime kelime)
+            // whisper-1 sadece final verir, streaming yapmaz
             transcription: {
-              model: "whisper-1"
+              model: "gpt-4o-transcribe"
             },
             // ✅ Turn detection - gürültülü ortam için yüksek threshold
             turn_detection: {
