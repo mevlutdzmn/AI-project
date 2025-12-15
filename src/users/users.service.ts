@@ -104,4 +104,24 @@ export class UsersService {
             .delete(users)
             .where(eq(users.id, userId));
     }
+
+    async updateUserProfile(userId: number, data: { name?: string; email?: string }) {
+        const updateData: Partial<{ name: string; email: string }> = {};
+        
+        if (data.name !== undefined) {
+            updateData.name = data.name;
+        }
+        if (data.email !== undefined) {
+            updateData.email = data.email;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+            await this.db
+                .update(users)
+                .set(updateData)
+                .where(eq(users.id, userId));
+        }
+
+        return this.updateProfile(userId);
+    }
 }

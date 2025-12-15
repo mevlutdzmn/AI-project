@@ -30,7 +30,7 @@ export class ZarinpalAdapter {
             '00000000-0000-0000-0000-000000000000';
         this.CALLBACK_URL =
             this.configService.get<string>('ZARINPAL_CALLBACK_URL') ||
-            'http://localhost:4001/api/v1/payments/callback';
+            'http://localhost:4000/api/v1/payments/callback';
 
         if (this.IS_SANDBOX) {
             this.ZARINPAL_API_URL = 'https://sandbox.zarinpal.com/pg/v4/payment';

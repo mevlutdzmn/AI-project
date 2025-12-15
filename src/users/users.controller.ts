@@ -22,9 +22,9 @@ export class UsersController {
     @Put('profile')
     @ApiOperation({ summary: 'Update user profile' })
     @ApiResponse({ status: 200, description: 'Profile updated' })
-    async updateProfile(@Req() req, @Body() body: any) {
-        // TODO: Implement profile update logic
-        return { success: true, message: 'Profile update not fully implemented' };
+    async updateProfile(@Req() req, @Body() body: { name?: string; email?: string }) {
+        const updatedUser = await this.usersService.updateUserProfile(req.user.id, body);
+        return { success: true, user: updatedUser };
     }
 
     @UseGuards(AuthGuard('jwt'))

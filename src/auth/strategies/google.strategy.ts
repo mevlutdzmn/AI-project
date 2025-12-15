@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+  private readonly logger = new Logger(GoogleStrategy.name);
+  
   constructor(private configService: ConfigService) {
     // Detect environment: Vercel production vs local development
     const isVercel = process.env.VERCEL === '1';
@@ -17,13 +19,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const callbackURL = `${backendUrl}/auth/google/callback`;
     
     // Debug logging to verify configuration
-    console.log('🔍 Google OAuth Config:', {
-      environment: isVercel ? 'Vercel Production' : 'Local/Other',
-      backendUrl,
-      callbackURL,
-      clientID: configService.get<string>('GOOGLE_CLIENT_ID')?.substring(0, 20) + '...',
-      vercelEnv: process.env.VERCEL,
-    });
+    const logger = new Logger(GoogleStrategy.name);
+    logger.debug(`Google OAuth Config - env: ${isVercel ? 'Vercel' : 'Local'}, callback: ${callbackURL}`);
     
     super({
       clientID: configService.get<string>('GOOGLE_CLIENT_ID') || '',

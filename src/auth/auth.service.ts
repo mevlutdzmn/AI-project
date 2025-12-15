@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../notifications/email.service';
@@ -15,6 +15,8 @@ const VERIFICATION_WINDOW_MINUTES = 15;
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+    
     constructor(
         private userService: UsersService,
         private jwtService: JwtService,
@@ -141,16 +143,10 @@ export class AuthService {
         const normalizedInputCode = String(code).trim();
         const normalizedStoredCode = String(pendingUser.verificationCode).trim();
 
-        console.log('Code comparison:', {
-            input: normalizedInputCode,
-            inputLength: normalizedInputCode.length,
-            stored: normalizedStoredCode,
-            storedLength: normalizedStoredCode.length,
-            match: normalizedInputCode === normalizedStoredCode
-        });
+        this.logger.debug(`Code comparison - input: ${normalizedInputCode}, stored: ${normalizedStoredCode}, match: ${normalizedInputCode === normalizedStoredCode}`);
 
         if (normalizedStoredCode !== normalizedInputCode) {
-            console.error('❌ Code mismatch! Input:', normalizedInputCode, 'Stored:', normalizedStoredCode);
+            this.logger.warn(`Code mismatch! Input: ${normalizedInputCode}, Stored: ${normalizedStoredCode}`);
             throw new Error('Invalid verification code');
         }
 
@@ -158,17 +154,17 @@ export class AuthService {
             pendingUser.verificationExpires &&
             new Date() > new Date(pendingUser.verificationExpires)
         ) {
-            console.error('Code expired!');
+            this.logger.warn('Code expired!');
             throw new Error('Verification code expired');
         }
 
-        console.log('✅ Code validated, creating user...');
+        this.logger.log('Code validated, creating user...');
         
         const subscriptionEnd = new Date();
         subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
 
         try {
-            console.log('Inserting user into database...');
+            this.logger.debug('Inserting user into database...');
             const [newUser] = await this.db
                 .insert(users)
                 .values({
@@ -184,12 +180,12 @@ export class AuthService {
                 })
                 .returning();
 
-            console.log('✅ User created successfully:', newUser.id);
+            this.logger.log(`User created successfully: ${newUser.id}`);
 
             // Only delete pending user after successful insert
             await this.db.delete(pending_users).where(eq(pending_users.email, email));
             
-            console.log('✅ Pending user cleaned up');
+            this.logger.debug('Pending user cleaned up');
             
             // Generate JWT token for immediate login
             const payload = { userId: newUser.id, email: newUser.email, isAdmin: newUser.isAdmin };
@@ -212,10 +208,10 @@ export class AuthService {
                 token,
             };
             
-            console.log('✅ Returning result with token');
+            this.logger.debug('Returning result with token');
             return result;
         } catch (error) {
-            console.error('❌ Failed to create user:', error);
+            this.logger.error('Failed to create user:', error);
             // Don't delete pending user if insert failed
             throw new Error('Failed to create user account. Please try again.');
         }

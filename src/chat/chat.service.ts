@@ -415,7 +415,7 @@ export class ChatService {
     }
 
     async createSession(userId: number, title?: string) {
-        console.log(`[ChatService] Creating session for user ${userId}...`);
+        this.logger.debug(`Creating session for user ${userId}...`);
         const [session] = await this.db
             .insert(sessions)
             .values({
@@ -424,7 +424,7 @@ export class ChatService {
             })
             .returning();
 
-        console.log(`[ChatService] ✅ Session created: ${session.id}`);
+        this.logger.debug(`Session created: ${session.id}`);
         
         // Verify session exists immediately
         const verification = await this.db
@@ -434,9 +434,9 @@ export class ChatService {
             .limit(1);
         
         if (verification.length === 0) {
-            console.error(`[ChatService] ❌ Session ${session.id} not found after creation!`);
+            this.logger.error(`Session ${session.id} not found after creation!`);
         } else {
-            console.log(`[ChatService] ✅ Session ${session.id} verified in database`);
+            this.logger.debug(`Session ${session.id} verified in database`);
         }
 
         return session;
@@ -1087,7 +1087,7 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
         const isVerbose = process.env.DEBUG_SESSIONS === 'true';
         
         if (isVerbose) {
-            console.log(`[ensureSessionOwnership] Checking session ${sessionId} for user ${userId}...`);
+            this.logger.debug(`Checking session ${sessionId} for user ${userId}...`);
         }
         
         const [session] = await this.db
@@ -1099,12 +1099,12 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
             .where(eq(sessions.id, sessionId));
 
         if (!session) {
-            console.error(`[ensureSessionOwnership] ❌ Session ${sessionId} not found in database`);
+            this.logger.error(`Session ${sessionId} not found in database`);
             throw new Error('Session not found or unauthorized');
         }
 
         if (isVerbose) {
-            console.log(`[ensureSessionOwnership] Found session ${sessionId}, owner: ${session.ownerId}, requesting user: ${userId}`);
+            this.logger.debug(`Found session ${sessionId}, owner: ${session.ownerId}, requesting user: ${userId}`);
         }
 
         // Normalize both to numbers for comparison (handle potential type mismatches)
@@ -1112,12 +1112,12 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
         const normalizedUserId = typeof userId === 'string' ? parseInt(userId as any, 10) : userId;
 
         if (normalizedOwnerId !== normalizedUserId) {
-            console.error(`[ensureSessionOwnership] ❌ User ${normalizedUserId} doesn't own session ${sessionId} (owner: ${normalizedOwnerId})`);
+            this.logger.error(`User ${normalizedUserId} doesn't own session ${sessionId} (owner: ${normalizedOwnerId})`);
             throw new Error('Session not found or unauthorized');
         }
         
         if (isVerbose) {
-            console.log(`[ensureSessionOwnership] ✅ Ownership verified`);
+            this.logger.debug(`Ownership verified for session ${sessionId}`);
         }
     }
 

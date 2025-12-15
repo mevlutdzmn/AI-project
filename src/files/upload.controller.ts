@@ -21,6 +21,42 @@ import axios from 'axios';
 // Detect if running on Vercel
 const isVercel = !!process.env.VERCEL;
 
+// ✅ Security: İzin verilen MIME tipleri ve uzantılar
+const ALLOWED_MIMETYPES = [
+    'application/pdf',
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'text/plain',
+    'application/json',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+
+const ALLOWED_EXTENSIONS = [
+    '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp',
+    '.txt', '.json', '.doc', '.docx', '.xls', '.xlsx',
+];
+
+// ✅ Security: Dosya filtresi
+const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
+    const ext = extname(file.originalname).toLowerCase();
+    const mime = file.mimetype.toLowerCase();
+    
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        return cb(new HttpException(`İzin verilmeyen dosya uzantısı: ${ext}`, HttpStatus.BAD_REQUEST), false);
+    }
+    
+    if (!ALLOWED_MIMETYPES.includes(mime)) {
+        return cb(new HttpException(`İzin verilmeyen dosya tipi: ${mime}`, HttpStatus.BAD_REQUEST), false);
+    }
+    
+    cb(null, true);
+};
+
 // Multer configuration for local development
 const localMulterOptions = {
     storage: diskStorage({
@@ -40,12 +76,14 @@ const localMulterOptions = {
         },
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter, // ✅ Security: Dosya filtresi eklendi
 };
 
 // Multer configuration for Vercel (memory storage)
 const vercelMulterOptions = {
     storage: memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter, // ✅ Security: Dosya filtresi eklendi
 };
 
 @ApiTags('Files')

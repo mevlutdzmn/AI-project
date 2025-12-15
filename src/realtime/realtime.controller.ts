@@ -1,9 +1,10 @@
-import { Controller, Post, Req, Res, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Req, Res, HttpStatus, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('realtime')
 export class RealtimeController {
+  private readonly logger = new Logger(RealtimeController.name);
   constructor(private configService: ConfigService) {}
 
   /**
@@ -16,7 +17,7 @@ export class RealtimeController {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     
     if (!apiKey) {
-      console.error('[realtime] Missing OPENAI_API_KEY');
+      this.logger.error('Missing OPENAI_API_KEY');
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ 
         error: 'Missing server OPENAI_API_KEY' 
       });
@@ -34,7 +35,7 @@ export class RealtimeController {
         bodyText = JSON.stringify(req.body);
       }
 
-      console.log('[realtime] Creating session, body_len:', bodyText.length);
+      this.logger.debug(`Creating session, body_len: ${bodyText.length}`);
 
       const openaiUrl = 'https://api.openai.com/v1/realtime/calls';
       
@@ -94,7 +95,7 @@ RULES:
       formBody += `${JSON.stringify(sessionConfig)}\r\n`;
       formBody += `--${boundary}--\r\n`;
 
-      console.log('[realtime] Sending to OpenAI...');
+      this.logger.debug('Sending to OpenAI...');
 
       const response = await fetch(openaiUrl, {
         method: 'POST',
@@ -106,9 +107,9 @@ RULES:
       });
 
       const respText = await response.text();
-      console.log('[realtime] OpenAI response status:', response.status);
+      this.logger.debug(`OpenAI response status: ${response.status}`);
       if (response.status !== 200 && response.status !== 201) {
-        console.log('[realtime] OpenAI error response:', respText.substring(0, 500));
+        this.logger.warn(`OpenAI error response: ${respText.substring(0, 500)}`);
       }
 
       // Headers'ı kopyala

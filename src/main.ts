@@ -6,6 +6,8 @@ import { json, raw } from 'express';
 import * as express from 'express';
 import { join } from 'path';
 import helmet from 'helmet';
+import * as compression from 'compression';
+const compress = (compression as any).default || compression;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -23,15 +25,50 @@ async function bootstrap() {
   const prefix = 'api/v1';
   app.setGlobalPrefix(prefix);
 
-  app.use(`/${prefix}/payments/webhook`, raw({ type: 'application/json' }));
-  app.use(json({ limit: '50mb' }));
+  // ✅ Performance: Compression (SSE ve webhook hariç)
+  app.use(compress({
+    filter: (req, res) => {
+      // SSE stream'leri sıkıştırma
+      if (req.headers.accept === 'text/event-stream') {
+        return false;
+      }
+      // Webhook'ları sıkıştırma
+      if (req.path.includes('/payments/webhook')) {
+        return false;
+      }
+      return compress.filter(req, res);
+    },
+    threshold: 1024, // 1KB'den küçük yanıtları sıkıştırma
+  }));
 
-  // Security headers via Helmet (CSP disabled for now; can be tuned later)
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(`/${prefix}/payments/webhook`, raw({ type: 'application/json' }));
+  app.use(json({ limit: '10mb' })); // ✅ Security: 50MB'dan 10MB'a düşürüldü
+
+  // ✅ Security: Helmet with basic CSP
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Dev için gevşek
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "https:", "wss:"],
+        fontSrc: ["'self'", "data:", "https:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'", "blob:"],
+        frameSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // OpenAI API ile uyumluluk
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }));
 
   // Serve static files for local development only
   if (!process.env.VERCEL) {
-    app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+    app.use('/uploads', express.static(join(process.cwd(), 'uploads'), {
+      maxAge: '1d', // ✅ Performance: Static dosyalar için cache
+      etag: true,
+    }));
   }
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
