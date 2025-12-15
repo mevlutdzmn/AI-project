@@ -50,7 +50,7 @@ export class ChatController {
         const userId = req.user.id;
 
         // Create session
-        const session = await this.chatService.createSession(userId, 'New Chat');
+        const session = await this.chatService.createSession(userId, 'گفتگوی جدید');
 
         // Send first message
         const response = await this.chatService.sendMessage(

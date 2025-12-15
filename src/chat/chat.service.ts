@@ -420,7 +420,7 @@ export class ChatService {
             .insert(sessions)
             .values({
                 userId,
-                title: title?.trim() || 'New Chat',
+                title: title?.trim() || 'گفتگوی جدید',
             })
             .returning();
 
