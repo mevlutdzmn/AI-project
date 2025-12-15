@@ -864,8 +864,8 @@ export class ChatService {
             })
             .returning();
 
-        // ✅ İlk mesajda session title'ını otomatik güncelle
-        this.autoUpdateSessionTitle(sessionId, displayContent);
+        // ✅ İlk mesajda AI ile session title güncelle (arka planda)
+        this.autoGenerateTitle(sessionId);
 
         let messageText = '';
         if (typeof aiContent === 'string') {
