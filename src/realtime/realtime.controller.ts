@@ -39,7 +39,7 @@ export class RealtimeController {
 
       const openaiUrl = 'https://api.openai.com/v1/realtime/calls';
       
-      // Session configuration - çok dilli destek + transcription
+      // Session configuration - çok dilli destek + transcription + gürültü yönetimi
       const sessionConfig = {
         type: "realtime",
         model: "gpt-4o-realtime-preview",
@@ -50,20 +50,24 @@ export class RealtimeController {
 4. English (Hello, Hi) → respond in English
 5. Keep responses SHORT (1-2 sentences max)
 6. Be friendly and conversational
-7. NEVER switch languages - match the user's language exactly`,
-        // ✅ Yeni API formatı - audio içinde transcription ve turn_detection
+7. NEVER switch languages - match the user's language exactly
+8. If audio is unclear, ask user to repeat
+
+CONTEXT: Voice chat app, user may be in noisy environment.
+LANGUAGE PRIORITY: Persian > Turkish > English`,
+        // ✅ ChatGPT-style audio config - gürültü yönetimi için optimize
         audio: {
           input: {
             // ✅ Transcription - kullanıcının söylediklerini yazıya dök
             transcription: {
               model: "whisper-1"
             },
-            // ✅ Turn detection - konuşma algılama (server VAD)
+            // ✅ Turn detection - gürültülü ortam için yüksek threshold
             turn_detection: {
               type: "server_vad",
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500
+              threshold: 0.65,          // ✅ Yükseltildi (0.5 -> 0.65)
+              prefix_padding_ms: 400,   // ✅ Artırıldı (300 -> 400)
+              silence_duration_ms: 700  // ✅ Artırıldı (500 -> 700)
             }
           },
           output: {
