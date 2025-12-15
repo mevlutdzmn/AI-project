@@ -3,7 +3,7 @@ import { DRIZZLE } from '../database/drizzle.provider';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../database/schema';
 import { sessions, messages, users } from '../database/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { OpenAIAdapter, ChatMessage } from '../ai/adapters/openai.adapter';
 import { DalleAdapter } from '../ai/adapters/dalle.adapter';
 import { SearchAdapter } from '../ai/adapters/search.adapter';
@@ -543,6 +543,45 @@ export class ChatService {
             .from(messages)
             .where(eq(messages.sessionId, sessionId))
             .orderBy(messages.createdAt);
+    }
+
+    /**
+     * Cursor-based pagination for messages (ChatGPT-style)
+     * Returns messages older than beforeId, limited to `limit` count
+     * Messages are returned in ascending order (oldest first for display)
+     */
+    async getSessionMessagesPaginated(
+        sessionId: string,
+        userId: number,
+        limit: number = 10,
+        beforeId?: number,
+    ): Promise<{ messages: any[]; hasMore: boolean }> {
+        await this.ensureSessionOwnership(sessionId, userId);
+
+        // Build query conditions
+        const conditions = [eq(messages.sessionId, sessionId)];
+        
+        if (beforeId) {
+            // Get messages with ID less than beforeId (older messages)
+            conditions.push(sql`${messages.id} < ${beforeId}`);
+        }
+
+        // Fetch limit + 1 to check if there are more
+        const result = await this.db
+            .select()
+            .from(messages)
+            .where(and(...conditions))
+            .orderBy(desc(messages.id)) // Get newest of the "older" messages first
+            .limit(limit + 1);
+
+        const hasMore = result.length > limit;
+        const messagesToReturn = hasMore ? result.slice(0, limit) : result;
+
+        // Reverse to get ascending order (oldest first) for display
+        return {
+            messages: messagesToReturn.reverse(),
+            hasMore,
+        };
     }
 
     async getRecentMessages(sessionId: string, limit: number = 20) {

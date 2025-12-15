@@ -77,11 +77,20 @@ export class ChatController {
 
     @Get('sessions/:sessionId/messages')
     @SkipThrottle()
-    @ApiOperation({ summary: 'Get all messages in a session' })
+    @ApiOperation({ summary: 'Get messages in a session with cursor-based pagination' })
     @ApiParam({ name: 'sessionId', description: 'Session ID' })
+    @ApiQuery({ name: 'limit', required: false, description: 'Number of messages to return (default: 10)' })
+    @ApiQuery({ name: 'beforeId', required: false, description: 'Return messages before this message ID (cursor)' })
     @ApiResponse({ status: 200, description: 'Returns session messages' })
-    async getSessionMessages(@Req() req, @Param('sessionId') sessionId: string) {
-        return this.chatService.getSessionMessages(sessionId, req.user.id);
+    async getSessionMessages(
+        @Req() req,
+        @Param('sessionId') sessionId: string,
+        @Query('limit') limit?: string,
+        @Query('beforeId') beforeId?: string,
+    ) {
+        const parsedLimit = limit ? parseInt(limit, 10) : 10;
+        const parsedBeforeId = beforeId ? parseInt(beforeId, 10) : undefined;
+        return this.chatService.getSessionMessagesPaginated(sessionId, req.user.id, parsedLimit, parsedBeforeId);
     }
 
     @Post('messages')
