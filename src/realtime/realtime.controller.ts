@@ -37,46 +37,9 @@ export class RealtimeController {
 
       this.logger.debug(`Creating session, body_len: ${bodyText.length}`);
 
-      const openaiUrl = 'https://api.openai.com/v1/realtime/calls';
+      // ✅ WebRTC için doğru endpoint
+      const openaiUrl = 'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17';
       
-      // Session configuration - çok dilli destek + transcription + gürültü yönetimi
-      const sessionConfig = {
-        type: "realtime",
-        model: "gpt-4o-realtime-preview",
-        instructions: `You are a multilingual voice assistant. CRITICAL RULES:
-1. ALWAYS respond in the EXACT SAME LANGUAGE the user speaks
-2. Turkish (Merhaba, Nasılsın) → respond in Turkish
-3. Persian/Farsi (سلام، چطوری) → respond in Persian  
-4. English (Hello, Hi) → respond in English
-5. Keep responses SHORT (1-2 sentences max)
-6. Be friendly and conversational
-7. NEVER switch languages - match the user's language exactly
-8. If audio is unclear, ask user to repeat
-
-CONTEXT: Voice chat app, user may be in noisy environment.
-LANGUAGE PRIORITY: Persian > Turkish > English`,
-        // ✅ ChatGPT-style audio config - gürültü yönetimi için optimize
-        audio: {
-          input: {
-            // ✅ gpt-4o-transcribe = STREAMING partial results (kelime kelime)
-            // whisper-1 sadece final verir, streaming yapmaz
-            transcription: {
-              model: "gpt-4o-transcribe"
-            },
-            // ✅ Turn detection - gürültülü ortam için yüksek threshold
-            turn_detection: {
-              type: "server_vad",
-              threshold: 0.65,          // ✅ Yükseltildi (0.5 -> 0.65)
-              prefix_padding_ms: 400,   // ✅ Artırıldı (300 -> 400)
-              silence_duration_ms: 700  // ✅ Artırıldı (500 -> 700)
-            }
-          },
-          output: {
-            voice: "alloy"
-          }
-        }
-      };
-
       // SDP'yi parse et
       let sdp: string;
       try {
@@ -90,27 +53,16 @@ LANGUAGE PRIORITY: Persian > Turkish > English`,
         sdp = bodyText;
       }
 
-      // Multipart form-data oluştur (manuel)
-      const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-      
-      let formBody = '';
-      formBody += `--${boundary}\r\n`;
-      formBody += `Content-Disposition: form-data; name="sdp"\r\n\r\n`;
-      formBody += `${sdp}\r\n`;
-      formBody += `--${boundary}\r\n`;
-      formBody += `Content-Disposition: form-data; name="session"\r\n\r\n`;
-      formBody += `${JSON.stringify(sessionConfig)}\r\n`;
-      formBody += `--${boundary}--\r\n`;
+      this.logger.debug('Sending SDP to OpenAI...');
 
-      this.logger.debug('Sending to OpenAI...');
-
+      // ✅ WebRTC SDP negotiation - application/sdp formatında gönder
       const response = await fetch(openaiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Type': 'application/sdp',
         },
-        body: formBody,
+        body: sdp,
       });
 
       const respText = await response.text();
