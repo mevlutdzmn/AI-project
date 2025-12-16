@@ -260,11 +260,26 @@ const IMAGE_EDIT_KEYWORDS = [
     'realistik olsun',
     'gerçekçi yap',
     'realistik yap',
+    'gerçek gibi',
+    'gerçek olsun',
+    'gerçek yap',
+    'daha gerçek',
+    'gerçekmiş gibi',
+    'fotoğraf gibi',
+    'foto gibi',
+    'doğal görünsün',
+    'doğal olsun',
+    'daha doğal',
     'daha detaylı',
     'detaylı yap',
+    'detaylı olsun',
     'daha canlı',
     'renkleri değiştir',
+    'rengi değiştir',
+    'rengini değiştir',
     'arka planı değiştir',
+    'arka plan değiştir',
+    'arkaplanı değiştir',
     'daha parlak',
     'daha karanlık',
     'daha büyük',
@@ -300,6 +315,11 @@ const IMAGE_EDIT_KEYWORDS = [
     'modern yap',
     'eski yap',
     'yeni yap',
+    'resmi yap',
+    'resmi değiştir',
+    'resimi yap',
+    'görseli yap',
+    'görseli değiştir',
     
     // ==================== FARSÇA ====================
     'واقعی‌تر',
@@ -432,11 +452,13 @@ export class ChatService {
             
             for (const msg of recentMessages) {
                 if (msg.role === 'assistant' && typeof msg.content === 'string') {
-                    // Check for base64 image or markdown image
+                    // Check for generated image patterns
                     if (
                         msg.content.includes('![Generated Image]') ||
+                        msg.content.includes('![AI Generated Image]') ||
                         msg.content.includes('data:image/') ||
-                        msg.content.includes('![') && msg.content.includes('](data:image')
+                        msg.content.includes('![') && msg.content.includes('](data:image') ||
+                        msg.content.includes('](http') && msg.content.includes('oaidalleapi')
                     ) {
                         this.logger.log(`[ImageEditCheck] Found recent image in session ${sessionId}`);
                         return true;
@@ -448,6 +470,120 @@ export class ChatService {
             this.logger.error('[ImageEditCheck] Error checking recent images:', error);
             return false;
         }
+    }
+
+    /**
+     * Find the previous image generation prompt from user messages
+     */
+    private async findPreviousImagePrompt(sessionId: string): Promise<string | null> {
+        try {
+            const recentMessages = await this.db
+                .select()
+                .from(messages)
+                .where(eq(messages.sessionId, sessionId))
+                .orderBy(desc(messages.createdAt))
+                .limit(10);
+            
+            // Son assistant mesajında image var mı kontrol et
+            let foundImage = false;
+            for (const msg of recentMessages) {
+                if (msg.role === 'assistant' && typeof msg.content === 'string') {
+                    if (
+                        msg.content.includes('![AI Generated Image]') ||
+                        msg.content.includes('![Generated Image]')
+                    ) {
+                        foundImage = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!foundImage) return null;
+            
+            // Image'dan önceki user mesajını bul (bu original prompt)
+            for (let i = 0; i < recentMessages.length; i++) {
+                const msg = recentMessages[i];
+                if (msg.role === 'assistant' && typeof msg.content === 'string' &&
+                    (msg.content.includes('![AI Generated Image]') || msg.content.includes('![Generated Image]'))) {
+                    // Bir sonraki mesaj (daha eski) user mesajı olmalı
+                    for (let j = i + 1; j < recentMessages.length; j++) {
+                        if (recentMessages[j].role === 'user') {
+                            const userContent = recentMessages[j].content;
+                            if (typeof userContent === 'string') {
+                                this.logger.log(`[ImageEdit] Found previous prompt: "${userContent.substring(0, 50)}..."`);
+                                return userContent;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            this.logger.error('[ImageEdit] Error finding previous prompt:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Extract and translate user's modification request to English style modifiers
+     */
+    private extractImageModification(userRequest: string): string {
+        const lowerRequest = userRequest.toLowerCase();
+        
+        // Türkçe -> İngilizce style modifier mapping
+        const modificationMap: Record<string, string> = {
+            // Realism
+            'realistik': 'photorealistic, ultra realistic',
+            'gerçekçi': 'photorealistic, ultra realistic',
+            'gerçek': 'photorealistic, realistic',
+            'gerçek gibi': 'photorealistic like a real photograph',
+            'gerçek hayat': 'photorealistic like a real photograph',
+            'hayattaki gibi': 'photorealistic like a real photograph',
+            'fotoğraf gibi': 'like a professional photograph',
+            'doğal': 'natural, realistic',
+            
+            // Detail
+            'detaylı': 'highly detailed, intricate details',
+            'daha detaylı': 'more detailed, ultra detailed',
+            
+            // Lighting
+            'parlak': 'brighter lighting',
+            'karanlık': 'darker, moody lighting',
+            'aydınlık': 'well lit, bright',
+            
+            // Style
+            'anime': 'anime style',
+            'karikatür': 'cartoon style',
+            'cartoon': 'cartoon style',
+            'çizgi film': 'cartoon animation style',
+            'siyah beyaz': 'black and white, monochrome',
+            'vintage': 'vintage style, retro',
+            'retro': 'retro style',
+            'modern': 'modern style',
+            
+            // Composition
+            'yakın': 'close-up shot',
+            'uzak': 'wide shot',
+            'büyük': 'larger, zoomed in',
+            'küçük': 'smaller, zoomed out',
+        };
+        
+        // Find matching modifiers
+        const modifiers: string[] = [];
+        for (const [turkish, english] of Object.entries(modificationMap)) {
+            if (lowerRequest.includes(turkish)) {
+                modifiers.push(english);
+            }
+        }
+        
+        // If no specific modifier found, use the original request as style hint
+        if (modifiers.length === 0) {
+            return `make it ${userRequest}`;
+        }
+        
+        return modifiers.join(', ');
     }
 
     // PDF'den metin çıkarma - tablo yapısını koruyarak
@@ -869,6 +1005,7 @@ export class ChatService {
                 sessionId,
                 messageText || 'Generate an image',
                 model,
+                false, // isEditRequest = false (new image)
             );
             return { response: imageResponse, userMessageId: userMsg.id };
         }
@@ -882,6 +1019,7 @@ export class ChatService {
                     sessionId,
                     messageText || 'Edit the image',
                     model,
+                    true, // isEditRequest = true (edit previous image)
                 );
                 return { response: imageResponse, userMessageId: userMsg.id };
             }
@@ -1057,6 +1195,7 @@ export class ChatService {
                 sessionId,
                 messageText || 'Generate an image',
                 model,
+                false, // isEditRequest = false (new image)
             );
             onChunk(imageResponse);
             return { sessionId, userMessageId: userMsg.id };
@@ -1064,14 +1203,19 @@ export class ChatService {
 
         // ✅ Multi-turn image editing: "daha realistik olsun", "renkleri değiştir" gibi follow-up'lar
         // Son mesajda görsel varsa ve kullanıcı image editing keyword kullanıyorsa
-        if (this.isImageEditFollowUp(aiContent)) {
+        const isEditRequest = this.isImageEditFollowUp(aiContent);
+        this.logger.log(`[ImageEdit] Checking: "${messageText.substring(0, 50)}..." - isEditRequest: ${isEditRequest}`);
+        
+        if (isEditRequest) {
             const hasRecentImage = await this.hasRecentImageInSession(sessionId);
+            this.logger.log(`[ImageEdit] hasRecentImage: ${hasRecentImage}`);
             if (hasRecentImage) {
-                this.logger.log(`[ImageEdit] Detected image edit follow-up: "${messageText.substring(0, 50)}..."`);
+                this.logger.log(`[ImageEdit] ✅ Triggering image regeneration for: "${messageText.substring(0, 50)}..."`);
                 const imageResponse = await this.handleImageRequest(
                     sessionId,
                     messageText || 'Edit the image',
                     model,
+                    true, // isEditRequest = true (edit previous image)
                 );
                 onChunk(imageResponse);
                 return { sessionId, userMessageId: userMsg.id };
@@ -1391,6 +1535,7 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
         sessionId: string,
         prompt: string,
         model?: string,
+        isEditRequest: boolean = false,
     ) {
         try {
             const [session] = await this.db
@@ -1435,9 +1580,21 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
                 return limitMsg;
             }
 
-            const cleanPrompt = prompt.trim();
+            let finalPrompt = prompt.trim();
 
-            if (!cleanPrompt) {
+            // ✅ Multi-turn: Eğer edit request ise, önceki image prompt'unu bul ve birleştir
+            if (isEditRequest && finalPrompt) {
+                const previousPrompt = await this.findPreviousImagePrompt(sessionId);
+                if (previousPrompt) {
+                    // Kullanıcının modifikasyon isteğini analiz et ve akıllıca birleştir
+                    const modification = this.extractImageModification(finalPrompt);
+                    // Önceki prompt'u koru, sadece style modifier ekle
+                    finalPrompt = `${previousPrompt}. Style modification: ${modification}. Keep the same subject and composition.`;
+                    this.logger.log(`[ImageEdit] Combined prompt: "${finalPrompt.substring(0, 150)}..."`);
+                }
+            }
+
+            if (!finalPrompt) {
                 const errorMsg = '❌ لطفاً توضیحی برای تصویر مورد نظر خود بنویسید.';
                 await this.db.insert(messages).values({
                     sessionId,
@@ -1449,7 +1606,7 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
                 return errorMsg;
             }
 
-            const imageUrl = await this.dalle.generateImage(cleanPrompt);
+            const imageUrl = await this.dalle.generateImage(finalPrompt);
             const imageResponse = `![AI Generated Image](${imageUrl})`;
 
             if (!isAdmin) {

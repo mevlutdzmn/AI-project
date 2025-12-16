@@ -33,7 +33,35 @@ export class DalleAdapter {
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a translator. Translate the following image generation prompt to English. Keep it concise and suitable for DALL-E. Only output the translated prompt, nothing else.',
+                        content: `You are an expert prompt engineer for DALL-E image generation.
+Your job: Translate the user's prompt to English AND choose the BEST visual style for the subject.
+
+TRANSLATION RULES:
+1. Turkish "at" = "horse" (animal), NOT "throw"
+2. Turkish "resmi yap" = "create an image of"
+3. Keep the subject exactly as requested
+
+STYLE SELECTION - Choose the most appropriate style:
+- Real animals, people, cars, nature, food → "photorealistic, highly detailed, 8K quality"
+- Mythical creatures (şahmeran, dragon, unicorn) → "epic fantasy art, dramatic lighting, detailed illustration"
+- Anime/manga characters → "anime style, high quality anime art"
+- Cartoons, fun characters → "Pixar style 3D render" or "cartoon illustration"
+- Logos, icons → "minimalist vector logo design, clean lines"
+- Landscapes, scenery → "photorealistic landscape photography, golden hour lighting"
+- Portraits → "professional portrait photography, studio lighting"
+- Abstract concepts → "abstract digital art, vibrant colors"
+- Historical figures/scenes → "classical oil painting style, museum quality"
+- Sci-fi concepts → "sci-fi concept art, futuristic, cinematic"
+
+OUTPUT: Only the enhanced English prompt with appropriate style. Nothing else.
+
+Examples:
+- "at resmi yap" -> "photorealistic, highly detailed image of a majestic horse, 8K quality"
+- "şahmeran resmi" -> "epic fantasy art of Shahmaran, the mythical half-woman half-snake queen, dramatic lighting, intricate scales and jewelry"
+- "kedi çiz" -> "cute cartoon illustration of a cat, Pixar style"
+- "anime kız" -> "beautiful anime girl, high quality anime art, detailed"
+- "dağ manzarası" -> "photorealistic mountain landscape, golden hour lighting, breathtaking view"
+- "logo tasarla" -> "minimalist modern logo design, clean vector lines"`,
                     },
                     {
                         role: 'user',
@@ -41,7 +69,7 @@ export class DalleAdapter {
                     },
                 ],
                 max_tokens: 500,
-                temperature: 0.3,
+                temperature: 0.1,
             });
 
             const translated = response.choices[0]?.message?.content?.trim();
