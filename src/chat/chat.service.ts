@@ -250,6 +250,113 @@ const IMAGE_KEYWORDS = [
     'movie poster',
 ];
 
+// ✅ Multi-turn image editing keywords - follow-up requests
+// These only apply when the last assistant message contains an image
+const IMAGE_EDIT_KEYWORDS = [
+    // ==================== TÜRKÇE ====================
+    'daha realistik',
+    'daha gerçekçi',
+    'gerçekçi olsun',
+    'realistik olsun',
+    'gerçekçi yap',
+    'realistik yap',
+    'daha detaylı',
+    'detaylı yap',
+    'daha canlı',
+    'renkleri değiştir',
+    'arka planı değiştir',
+    'daha parlak',
+    'daha karanlık',
+    'daha büyük',
+    'daha küçük',
+    'yakınlaştır',
+    'uzaklaştır',
+    'ekle',
+    'çıkar',
+    'kaldır',
+    'değiştir',
+    'düzenle',
+    'düzelt',
+    'iyileştir',
+    'güzelleştir',
+    'aynısını',
+    'benzerini',
+    'tekrar yap',
+    'yeniden yap',
+    'başka bir tane',
+    'bir tane daha',
+    'farklı bir',
+    'farklı versiyonu',
+    'anime yap',
+    'karikatür yap',
+    'cartoon yap',
+    'çizgi film yap',
+    'boyama yap',
+    'siyah beyaz',
+    'renkli yap',
+    'renksiz yap',
+    'vintage yap',
+    'retro yap',
+    'modern yap',
+    'eski yap',
+    'yeni yap',
+    
+    // ==================== FARSÇA ====================
+    'واقعی‌تر',
+    'بیشتر واقعی',
+    'واقعی کن',
+    'رنگش رو عوض کن',
+    'پس‌زمینه رو عوض کن',
+    'روشن‌تر',
+    'تاریک‌تر',
+    'بزرگ‌تر',
+    'کوچک‌تر',
+    'اضافه کن',
+    'حذف کن',
+    'تغییر بده',
+    'بهتر کن',
+    'یکی دیگه',
+    'دوباره بساز',
+    'مشابهش',
+    'انیمه‌ای',
+    'کارتونی',
+    
+    // ==================== İNGİLİZCE ====================
+    'more realistic',
+    'make it realistic',
+    'more detailed',
+    'add more detail',
+    'change the color',
+    'change colors',
+    'change the background',
+    'make it brighter',
+    'make it darker',
+    'make it bigger',
+    'make it smaller',
+    'zoom in',
+    'zoom out',
+    'add',
+    'remove',
+    'change',
+    'modify',
+    'edit',
+    'improve',
+    'enhance',
+    'similar',
+    'another one',
+    'one more',
+    'different version',
+    'make it anime',
+    'make it cartoon',
+    'make it black and white',
+    'make it colorful',
+    'make it vintage',
+    'make it modern',
+    'redo',
+    'try again',
+    'regenerate',
+];
+
 @Injectable()
 export class ChatService {
     private readonly logger = new Logger(ChatService.name);
@@ -287,6 +394,60 @@ export class ChatService {
         }
 
         return false;
+    }
+
+    /**
+     * Check if this is a follow-up image editing request
+     * Returns true if:
+     * 1. The message contains image editing keywords (like "make it realistic", "change colors")
+     * 2. The last assistant message in the session contains an image
+     */
+    private isImageEditFollowUp(message: any): boolean {
+        let messageText = '';
+        
+        if (typeof message === 'string') {
+            messageText = message.toLowerCase();
+        } else if (Array.isArray(message)) {
+            messageText = message
+                .filter((part: any) => part.type === 'text')
+                .map((part: any) => part.text || '')
+                .join(' ')
+                .toLowerCase();
+        }
+        
+        return IMAGE_EDIT_KEYWORDS.some((keyword) => messageText.includes(keyword));
+    }
+
+    /**
+     * Check if the last assistant message contains a generated image
+     */
+    private async hasRecentImageInSession(sessionId: string): Promise<boolean> {
+        try {
+            const recentMessages = await this.db
+                .select()
+                .from(messages)
+                .where(eq(messages.sessionId, sessionId))
+                .orderBy(desc(messages.createdAt))
+                .limit(5); // Son 5 mesaja bak
+            
+            for (const msg of recentMessages) {
+                if (msg.role === 'assistant' && typeof msg.content === 'string') {
+                    // Check for base64 image or markdown image
+                    if (
+                        msg.content.includes('![Generated Image]') ||
+                        msg.content.includes('data:image/') ||
+                        msg.content.includes('![') && msg.content.includes('](data:image')
+                    ) {
+                        this.logger.log(`[ImageEditCheck] Found recent image in session ${sessionId}`);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (error) {
+            this.logger.error('[ImageEditCheck] Error checking recent images:', error);
+            return false;
+        }
     }
 
     // PDF'den metin çıkarma - tablo yapısını koruyarak
@@ -712,6 +873,20 @@ export class ChatService {
             return { response: imageResponse, userMessageId: userMsg.id };
         }
 
+        // ✅ Multi-turn image editing: "daha realistik olsun", "renkleri değiştir" gibi follow-up'lar
+        if (this.isImageEditFollowUp(aiContent)) {
+            const hasRecentImage = await this.hasRecentImageInSession(sessionId);
+            if (hasRecentImage) {
+                this.logger.log(`[ImageEdit] Detected image edit follow-up: "${messageText.substring(0, 50)}..."`);
+                const imageResponse = await this.handleImageRequest(
+                    sessionId,
+                    messageText || 'Edit the image',
+                    model,
+                );
+                return { response: imageResponse, userMessageId: userMsg.id };
+            }
+        }
+
         if (mode === 'web') {
             const bingKey = this.configService.get<string>('BING_API_KEY');
             if (bingKey) {
@@ -887,6 +1062,21 @@ export class ChatService {
             return { sessionId, userMessageId: userMsg.id };
         }
 
+        // ✅ Multi-turn image editing: "daha realistik olsun", "renkleri değiştir" gibi follow-up'lar
+        // Son mesajda görsel varsa ve kullanıcı image editing keyword kullanıyorsa
+        if (this.isImageEditFollowUp(aiContent)) {
+            const hasRecentImage = await this.hasRecentImageInSession(sessionId);
+            if (hasRecentImage) {
+                this.logger.log(`[ImageEdit] Detected image edit follow-up: "${messageText.substring(0, 50)}..."`);
+                const imageResponse = await this.handleImageRequest(
+                    sessionId,
+                    messageText || 'Edit the image',
+                    model,
+                );
+                onChunk(imageResponse);
+                return { sessionId, userMessageId: userMsg.id };
+            }
+        }
         // ✅ Research Mode - Derin Araştırma
         if (mode === 'research') {
             return this.handleResearchMode(
