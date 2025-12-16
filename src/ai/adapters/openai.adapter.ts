@@ -51,6 +51,7 @@ export interface ChatMessage {
 export class OpenAIAdapter {
     private client: OpenAI | null;
     private lastResponseId: string | null = null;
+    private lastImageGenerationCallId: string | null = null; // Multi-turn image editing
     private readonly logger = new Logger(OpenAIAdapter.name);
 
     constructor(private configService: ConfigService) {
@@ -364,6 +365,12 @@ export class OpenAIAdapter {
             requestParams.previous_response_id = this.lastResponseId;
         }
 
+        // Multi-turn image editing: include last image_generation_call reference
+        // This allows follow-up prompts like "make it more realistic" or "change colors"
+        if (mode === 'image' && this.lastImageGenerationCallId) {
+            this.logger.log(`[GPT-5 Image] Multi-turn: using previous image_generation_call.id: ${this.lastImageGenerationCallId}`);
+        }
+
         // System/developer message is always first; the rest is conversation history
         const systemMsg = inputMessages[0];
         const convMessages = inputMessages.slice(1);
@@ -374,7 +381,20 @@ export class OpenAIAdapter {
 
         for (const keep of truncationAttempts) {
             try {
-                const toSend = [systemMsg, ...convMessages.slice(-keep)];
+                const toSend: any[] = [systemMsg, ...convMessages.slice(-keep)];
+                
+                // Multi-turn image editing: add image_generation_call reference to input
+                // This enables follow-up prompts like "make it realistic", "change colors", etc.
+                if (mode === 'image' && this.lastImageGenerationCallId) {
+                    toSend.push({
+                        type: 'image_generation_call',
+                        id: this.lastImageGenerationCallId,
+                    });
+                    this.logger.log(
+                        `[GPT-5 Image] Added image_generation_call reference to input for multi-turn editing`,
+                    );
+                }
+                
                 requestParams.input = toSend;
 
                 this.logger.log(
@@ -394,6 +414,15 @@ export class OpenAIAdapter {
                 if (imageGenerationCalls.length > 0 && imageGenerationCalls[0].result) {
                     const imageBase64 = imageGenerationCalls[0].result;
                     const revisedPrompt = imageGenerationCalls[0].revised_prompt || '';
+                    
+                    // Store image_generation_call.id for multi-turn editing
+                    // This allows follow-up requests like "make it realistic" or "add more detail"
+                    if (imageGenerationCalls[0].id) {
+                        this.lastImageGenerationCallId = imageGenerationCalls[0].id;
+                        this.logger.log(
+                            `[GPT-5 Image] Stored image_generation_call.id for multi-turn: ${this.lastImageGenerationCallId}`,
+                        );
+                    }
 
                     this.logger.log(
                         `[GPT-5 Image] Generated image with revised prompt: ${revisedPrompt}`,
@@ -517,5 +546,31 @@ export class OpenAIAdapter {
 
         // Return parsed data
         return response.output_parsed;
+    }
+
+    /**
+     * Clear conversation context (response ID and image generation call ID)
+     * Call this when starting a new conversation to ensure clean state
+     */
+    clearContext(): void {
+        this.lastResponseId = null;
+        this.lastImageGenerationCallId = null;
+        this.logger.log('[OpenAI] Cleared conversation context (responseId & imageGenerationCallId)');
+    }
+
+    /**
+     * Clear only the image generation context
+     * Useful when you want to keep conversation but start fresh image generation
+     */
+    clearImageContext(): void {
+        this.lastImageGenerationCallId = null;
+        this.logger.log('[OpenAI] Cleared image generation context');
+    }
+
+    /**
+     * Get current image generation call ID (for debugging/testing)
+     */
+    getLastImageGenerationCallId(): string | null {
+        return this.lastImageGenerationCallId;
     }
 }
