@@ -573,4 +573,77 @@ export class OpenAIAdapter {
     getLastImageGenerationCallId(): string | null {
         return this.lastImageGenerationCallId;
     }
+
+    // ------------------------------
+    // Deep Research (Responses API)
+    // ------------------------------
+    /**
+     * Kick off a Deep Research task in background mode.
+     * Uses o3-deep-research by default and attaches web_search_preview.
+     */
+    async startDeepResearch(
+        input: string,
+        options?: {
+            model?: 'o3-deep-research' | 'o4-mini-deep-research';
+            useWebSearch?: boolean;
+            useCodeInterpreter?: boolean;
+            vectorStoreIds?: string[];
+        },
+    ): Promise<{ id: string }> {
+        if (!this.client) {
+            throw new Error('OpenAI client not initialized');
+        }
+
+        const model = options?.model || 'o3-deep-research';
+        const tools: any[] = [];
+
+        // At least one data source is required
+        if (options?.useWebSearch !== false) {
+            tools.push({ type: 'web_search_preview' });
+        }
+        if (options?.vectorStoreIds && options.vectorStoreIds.length > 0) {
+            tools.push({ type: 'file_search', vector_store_ids: options.vectorStoreIds });
+        }
+        if (options?.useCodeInterpreter) {
+            tools.push({ type: 'code_interpreter', container: { type: 'auto' } });
+        }
+
+        if (tools.length === 0) {
+            // Ensure at least web search is enabled
+            tools.push({ type: 'web_search_preview' });
+        }
+
+        const resp = await (this.client as any).responses.create({
+            model,
+            input,
+            background: true,
+            tools,
+        });
+
+        this.logger.log(`[DeepResearch] Started: id=${resp.id}, model=${model}, tools=${tools.map(t=>t.type).join(',')}`);
+        return { id: resp.id };
+    }
+
+    /**
+     * Poll Deep Research task status and return structured data.
+     */
+    async getDeepResearchStatus(id: string): Promise<{
+        id: string;
+        status: string;
+        output_text?: string;
+        output?: any[];
+    }> {
+        if (!this.client) {
+            throw new Error('OpenAI client not initialized');
+        }
+
+        const resp = await (this.client as any).responses.get(id);
+        const status = resp?.status || 'unknown';
+        const output_text = resp?.output_text;
+        const output = resp?.output || [];
+
+        this.logger.log(`[DeepResearch] Status: id=${id}, status=${status}, items=${Array.isArray(output)?output.length:0}`);
+
+        return { id, status, output_text, output };
+    }
 }

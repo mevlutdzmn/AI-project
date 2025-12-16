@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { OpenAIAdapter } from './adapters/openai.adapter';
 import { DalleAdapter } from './adapters/dalle.adapter';
 import { SearchAdapter } from './adapters/search.adapter';
+import { DeepResearchAdapter } from './adapters/deep-research.adapter';
 import { UsersModule } from '../users/users.module';
 import { ImageGenerationTool } from './tools/image-generation.tool';
 import { WebSearchTool } from './tools/web-search.tool';
@@ -15,6 +16,7 @@ import { CanvasTool } from './tools/canvas.tool';
         OpenAIAdapter,
         DalleAdapter,
         SearchAdapter,
+        DeepResearchAdapter,
         ImageGenerationTool,
         WebSearchTool,
         DeepResearchTool,
@@ -25,6 +27,7 @@ import { CanvasTool } from './tools/canvas.tool';
         OpenAIAdapter,
         DalleAdapter,
         SearchAdapter,
+        DeepResearchAdapter,
         ImageGenerationTool,
         WebSearchTool,
         DeepResearchTool,

@@ -7,6 +7,7 @@ import { eq, desc, and, sql } from 'drizzle-orm';
 import { OpenAIAdapter, ChatMessage } from '../ai/adapters/openai.adapter';
 import { DalleAdapter } from '../ai/adapters/dalle.adapter';
 import { SearchAdapter } from '../ai/adapters/search.adapter';
+import { DeepResearchAdapter } from '../ai/adapters/deep-research.adapter';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { MemoryService } from '../memory/memory.service';
@@ -386,6 +387,7 @@ export class ChatService {
         private openai: OpenAIAdapter,
         private dalle: DalleAdapter,
         private search: SearchAdapter,
+        private deepResearch: DeepResearchAdapter,
         private usersService: UsersService,
         private configService: ConfigService,
         private memoryService: MemoryService,
@@ -524,6 +526,86 @@ export class ChatService {
             this.logger.error('[ImageEdit] Error finding previous prompt:', error);
             return null;
         }
+    }
+
+    // ------------------------------
+    // Deep Research service wrappers
+    // ------------------------------
+    async startDeepResearch(prompt: string, sessionId?: string, model?: string) {
+        // Yeni DeepResearchAdapter kullanıyoruz
+        return this.deepResearch.startResearch(prompt);
+    }
+
+    async getDeepResearchStatus(id: string) {
+        const session = this.deepResearch.getStatus(id);
+        if (!session) {
+            return { id, status: 'not_found' };
+        }
+
+        return {
+            id: session.id,
+            status: session.status,
+            steps: session.steps,
+            output_text: session.finalReport,
+            progress: this.formatResearchProgress(session),
+        };
+    }
+
+    /**
+     * ✅ Deep Research sonuçlarını database'e kaydet
+     * Bu sayede refresh yapınca mesajlar kaybolmaz
+     */
+    async saveDeepResearchMessages(
+        sessionId: string,
+        userId: number,
+        userMessage: string,
+        assistantMessage: string
+    ): Promise<{ success: boolean; userMessageId?: number; assistantMessageId?: number }> {
+        try {
+            // 1. User mesajını kaydet
+            const userMsg = await this.db.insert(messages).values({
+                sessionId,
+                role: 'user',
+                content: userMessage,
+            }).returning({ id: messages.id });
+
+            // 2. Assistant mesajını kaydet
+            const assistantMsg = await this.db.insert(messages).values({
+                sessionId,
+                role: 'assistant',
+                content: assistantMessage,
+            }).returning({ id: messages.id });
+
+            this.logger.log(`[DeepResearch] Saved to DB - Session: ${sessionId}, User: ${userMsg[0]?.id}, Assistant: ${assistantMsg[0]?.id}`);
+
+            return {
+                success: true,
+                userMessageId: userMsg[0]?.id,
+                assistantMessageId: assistantMsg[0]?.id,
+            };
+        } catch (error: any) {
+            this.logger.error(`[DeepResearch] Save failed: ${error.message}`);
+            return { success: false };
+        }
+    }
+
+    private formatResearchProgress(session: any): string {
+        const completedSteps = session.steps.filter((s: any) => s.status === 'completed').length;
+        const currentStep = session.steps.find((s: any) => s.status === 'in_progress');
+
+        if (currentStep) {
+            return `${currentStep.title} (${completedSteps}/${session.steps.length})`;
+        }
+
+        if (session.status === 'completed') {
+            return 'Araştırma tamamlandı!';
+        }
+
+        if (session.status === 'failed') {
+            return 'Araştırma başarısız oldu';
+        }
+
+        return `İşleniyor... (${completedSteps}/${session.steps.length})`;
     }
 
     /**

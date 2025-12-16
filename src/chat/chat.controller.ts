@@ -350,4 +350,47 @@ export class ChatController {
             res.status(HttpStatus.INTERNAL_SERVER_ERROR).send({ error: 'Could not download image' });
         }
     }
+
+    // ------------------------------
+    // Deep Research endpoints
+    // ------------------------------
+    @Post('research/start')
+    @ApiOperation({ summary: 'Start a Deep Research task (background)' })
+    @ApiResponse({ status: 202, description: 'Research started, returns id' })
+    async startDeepResearch(@Req() req, @Body() body: { prompt: string; sessionId?: string; model?: string }) {
+        const { prompt, sessionId, model } = body || {};
+        if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+            return { error: 'Prompt is required' };
+        }
+        const result = await this.chatService.startDeepResearch(prompt.trim(), sessionId, model);
+        return result;
+    }
+
+    @Get('research/status/:id')
+    @ApiOperation({ summary: 'Get Deep Research task status' })
+    @ApiParam({ name: 'id', description: 'Deep Research response id' })
+    @ApiResponse({ status: 200, description: 'Returns status and output' })
+    async deepResearchStatus(@Param('id') id: string) {
+        return this.chatService.getDeepResearchStatus(id);
+    }
+
+    @Post('research/save')
+    @ApiOperation({ summary: 'Save Deep Research result to database' })
+    @ApiResponse({ status: 200, description: 'Research messages saved' })
+    async saveDeepResearchResult(
+        @Req() req,
+        @Body() body: { sessionId: string; userMessage: string; assistantMessage: string }
+    ) {
+        const { sessionId, userMessage, assistantMessage } = body || {};
+        if (!sessionId || !userMessage || !assistantMessage) {
+            return { error: 'sessionId, userMessage and assistantMessage are required' };
+        }
+        
+        const userId = req.user?.id || req.user?.sub;
+        if (!userId) {
+            return { error: 'User not authenticated' };
+        }
+        
+        return this.chatService.saveDeepResearchMessages(sessionId, userId, userMessage, assistantMessage);
+    }
 }
