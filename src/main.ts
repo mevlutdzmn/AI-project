@@ -23,7 +23,9 @@ async function bootstrap() {
     });
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true, // Enable raw body for realtime API SDP handling
+  });
 
   // Security: restrict CORS to known frontend origins and enable credentials
   const allowedOrigins = [
@@ -74,6 +76,7 @@ async function bootstrap() {
   );
 
   app.use(`/${prefix}/payments/webhook`, raw({ type: 'application/json' }));
+  
   app.use(json({ limit: '10mb' })); // ✅ Security: 50MB'dan 10MB'a düşürüldü
 
   // ✅ Security: Helmet with basic CSP
