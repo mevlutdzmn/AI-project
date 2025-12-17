@@ -712,7 +712,7 @@ export class ChatService {
       const buffer = Buffer.from(base64Clean, 'base64');
 
       // pdf-parse v1.x - simple function call
-
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const pdfParse = require('pdf-parse');
 
       // Özel render fonksiyonu - sayfa düzenini korur

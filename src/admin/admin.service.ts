@@ -180,7 +180,6 @@ export class AdminService {
 
   async getPayments(page: number = 1, limit: number = 20, status?: string) {
     const offset = (page - 1) * limit;
-    let paymentsList;
 
     const query = this.db
       .select({
@@ -201,7 +200,7 @@ export class AdminService {
       query.where(eq(payments.status, status));
     }
 
-    paymentsList = await query;
+    const paymentsList = await query;
 
     const [totalCount] = await this.db
       .select({ count: count() })
@@ -251,7 +250,6 @@ export class AdminService {
     sessionId?: string,
   ) {
     const offset = (page - 1) * limit;
-    let messagesList;
     let countQuery;
 
     const baseQuery = this.db
@@ -289,7 +287,7 @@ export class AdminService {
       countQuery = this.db.select({ count: count() }).from(messages);
     }
 
-    messagesList = await baseQuery;
+    const messagesList = await baseQuery;
     const [total] = await countQuery;
 
     return {

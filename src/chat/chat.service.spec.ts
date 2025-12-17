@@ -11,7 +11,7 @@ import { DRIZZLE } from '../database/drizzle.provider';
 
 /**
  * ChatService Unit Tests
- * 
+ *
  * Note: ChatService has complex Drizzle ORM chaining that's difficult to mock.
  * These tests verify service instantiation and method availability.
  * For full integration tests, use e2e tests with a test database.
@@ -23,25 +23,50 @@ describe('ChatService', () => {
   const createDrizzleMock = () => {
     const mockResult = [{ id: 'session-123', userId: 1, ownerId: 1 }];
     const mock: Record<string, unknown> = {};
-    
+
     const handler = () => {
       const chainable: Record<string, unknown> = {
-        then: (resolve: (val: unknown) => void) => Promise.resolve(mockResult).then(resolve),
+        then: (resolve: (val: unknown) => void) =>
+          Promise.resolve(mockResult).then(resolve),
       };
-      
-      ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 
-       'insert', 'values', 'returning', 'update', 'set', 'delete'].forEach(m => {
+
+      [
+        'select',
+        'from',
+        'where',
+        'orderBy',
+        'limit',
+        'offset',
+        'insert',
+        'values',
+        'returning',
+        'update',
+        'set',
+        'delete',
+      ].forEach((m) => {
         chainable[m] = handler;
       });
-      
+
       return chainable;
     };
-    
-    ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 
-     'insert', 'values', 'returning', 'update', 'set', 'delete'].forEach(m => {
+
+    [
+      'select',
+      'from',
+      'where',
+      'orderBy',
+      'limit',
+      'offset',
+      'insert',
+      'values',
+      'returning',
+      'update',
+      'set',
+      'delete',
+    ].forEach((m) => {
       mock[m] = handler;
     });
-    
+
     return mock;
   };
 
@@ -50,9 +75,21 @@ describe('ChatService', () => {
       providers: [
         ChatService,
         { provide: DRIZZLE, useValue: createDrizzleMock() },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('test') } },
-        { provide: UsersService, useValue: { findById: jest.fn(), updateTokenUsage: jest.fn() } },
-        { provide: MemoryService, useValue: { getMemories: jest.fn().mockResolvedValue([]), addMemory: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('test') },
+        },
+        {
+          provide: UsersService,
+          useValue: { findById: jest.fn(), updateTokenUsage: jest.fn() },
+        },
+        {
+          provide: MemoryService,
+          useValue: {
+            getMemories: jest.fn().mockResolvedValue([]),
+            addMemory: jest.fn(),
+          },
+        },
         { provide: OpenAIAdapter, useValue: { chat: jest.fn() } },
         { provide: DalleAdapter, useValue: { generate: jest.fn() } },
         { provide: SearchAdapter, useValue: { search: jest.fn() } },

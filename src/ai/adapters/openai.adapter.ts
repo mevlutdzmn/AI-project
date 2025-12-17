@@ -537,7 +537,9 @@ export class OpenAIAdapter {
       }
       return {
         role: msg.role === 'system' ? 'developer' : msg.role,
-        content: String(msg.content),
+        content: Array.isArray(msg.content)
+          ? JSON.stringify(msg.content)
+          : String(msg.content),
       };
     });
 

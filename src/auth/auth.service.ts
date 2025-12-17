@@ -313,7 +313,7 @@ export class AuthService {
     const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Save hashed token to database (avoid storing raw token)
-    const hashedResetToken = require('crypto')
+    const hashedResetToken = crypto
       .createHash('sha256')
       .update(resetToken)
       .digest('hex');
@@ -340,10 +340,7 @@ export class AuthService {
 
   async resetPassword(token: string, newPassword: string) {
     // Find user by reset token
-    const hashedToken = require('crypto')
-      .createHash('sha256')
-      .update(token)
-      .digest('hex');
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
     const [user] = await this.db
       .select()
       .from(users)
