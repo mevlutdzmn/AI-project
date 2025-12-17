@@ -20,18 +20,33 @@ export class MemoryService {
   }
 
   // ✅ Add or update memory
-  async setMemory(userId: number, key: string, value: string, category: string = 'general') {
+  async setMemory(
+    userId: number,
+    key: string,
+    value: string,
+    category: string = 'general',
+  ) {
     const existing = await this.db
       .select()
       .from(schema.userMemories)
-      .where(and(eq(schema.userMemories.userId, userId), eq(schema.userMemories.key, key)))
+      .where(
+        and(
+          eq(schema.userMemories.userId, userId),
+          eq(schema.userMemories.key, key),
+        ),
+      )
       .limit(1);
 
     if (existing.length > 0) {
       const [updated] = await this.db
         .update(schema.userMemories)
         .set({ value, category, updatedAt: new Date() })
-        .where(and(eq(schema.userMemories.userId, userId), eq(schema.userMemories.key, key)))
+        .where(
+          and(
+            eq(schema.userMemories.userId, userId),
+            eq(schema.userMemories.key, key),
+          ),
+        )
         .returning();
       return updated;
     }
@@ -47,7 +62,12 @@ export class MemoryService {
   async deleteMemory(userId: number, key: string) {
     return this.db
       .delete(schema.userMemories)
-      .where(and(eq(schema.userMemories.userId, userId), eq(schema.userMemories.key, key)));
+      .where(
+        and(
+          eq(schema.userMemories.userId, userId),
+          eq(schema.userMemories.key, key),
+        ),
+      );
   }
 
   // ✅ Clear all memories
@@ -72,7 +92,7 @@ export class MemoryService {
     userId: number,
     aboutUser: string | null,
     responseStyle: string | null,
-    enabled: boolean = true
+    enabled: boolean = true,
   ) {
     const existing = await this.getCustomInstructions(userId);
 

@@ -27,10 +27,12 @@ export class UsageService {
     model: string,
     promptTokens: number,
     completionTokens: number,
-    sessionId?: string
+    sessionId?: string,
   ) {
     const pricing = MODEL_PRICING[model] || { input: 0.001, output: 0.002 };
-    const cost = (promptTokens / 1000) * pricing.input + (completionTokens / 1000) * pricing.output;
+    const cost =
+      (promptTokens / 1000) * pricing.input +
+      (completionTokens / 1000) * pricing.output;
 
     const [log] = await this.db
       .insert(schema.usageLogs)
@@ -59,15 +61,24 @@ export class UsageService {
       .where(
         and(
           eq(schema.usageLogs.userId, userId),
-          gte(schema.usageLogs.createdAt, since)
-        )
+          gte(schema.usageLogs.createdAt, since),
+        ),
       );
 
-    const totalTokens = logs.reduce((sum, log) => sum + (log.tokensUsed || 0), 0);
-    const totalCost = logs.reduce((sum, log) => sum + parseFloat(log.cost || '0'), 0);
+    const totalTokens = logs.reduce(
+      (sum, log) => sum + (log.tokensUsed || 0),
+      0,
+    );
+    const totalCost = logs.reduce(
+      (sum, log) => sum + parseFloat(log.cost || '0'),
+      0,
+    );
 
     // Group by model
-    const byModel: Record<string, { tokens: number; cost: number; count: number }> = {};
+    const byModel: Record<
+      string,
+      { tokens: number; cost: number; count: number }
+    > = {};
     for (const log of logs) {
       if (!byModel[log.model]) {
         byModel[log.model] = { tokens: 0, cost: 0, count: 0 };
@@ -107,12 +118,15 @@ export class UsageService {
       .where(
         and(
           eq(schema.usageLogs.userId, userId),
-          gte(schema.usageLogs.createdAt, since)
-        )
+          gte(schema.usageLogs.createdAt, since),
+        ),
       );
 
     // Group by date
-    const byDate: Record<string, { tokens: number; cost: number; requests: number }> = {};
+    const byDate: Record<
+      string,
+      { tokens: number; cost: number; requests: number }
+    > = {};
     for (const log of logs) {
       const date = log.createdAt.toISOString().split('T')[0];
       if (!byDate[date]) {

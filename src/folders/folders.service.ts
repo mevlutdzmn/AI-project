@@ -19,7 +19,12 @@ export class FoldersService {
       .orderBy(schema.folders.name);
   }
 
-  async createFolder(userId: number, name: string, color?: string, icon?: string) {
+  async createFolder(
+    userId: number,
+    name: string,
+    color?: string,
+    icon?: string,
+  ) {
     const [folder] = await this.db
       .insert(schema.folders)
       .values({ userId, name, color, icon })
@@ -27,12 +32,18 @@ export class FoldersService {
     return folder;
   }
 
-  async updateFolder(folderId: number, userId: number, data: { name?: string; color?: string; icon?: string }) {
+  async updateFolder(
+    folderId: number,
+    userId: number,
+    data: { name?: string; color?: string; icon?: string },
+  ) {
     const [existing] = await this.db
       .select()
       .from(schema.folders)
-      .where(and(eq(schema.folders.id, folderId), eq(schema.folders.userId, userId)));
-    
+      .where(
+        and(eq(schema.folders.id, folderId), eq(schema.folders.userId, userId)),
+      );
+
     if (!existing) throw new NotFoundException('Folder not found');
 
     const [updated] = await this.db
@@ -47,8 +58,10 @@ export class FoldersService {
     const [existing] = await this.db
       .select()
       .from(schema.folders)
-      .where(and(eq(schema.folders.id, folderId), eq(schema.folders.userId, userId)));
-    
+      .where(
+        and(eq(schema.folders.id, folderId), eq(schema.folders.userId, userId)),
+      );
+
     if (!existing) throw new NotFoundException('Folder not found');
 
     // Remove folder_id from sessions in this folder
@@ -57,9 +70,7 @@ export class FoldersService {
       .set({ folderId: null })
       .where(eq(schema.sessions.folderId, folderId));
 
-    await this.db
-      .delete(schema.folders)
-      .where(eq(schema.folders.id, folderId));
+    await this.db.delete(schema.folders).where(eq(schema.folders.id, folderId));
 
     return { success: true };
   }
@@ -68,8 +79,10 @@ export class FoldersService {
     const [folder] = await this.db
       .select()
       .from(schema.folders)
-      .where(and(eq(schema.folders.id, folderId), eq(schema.folders.userId, userId)));
-    
+      .where(
+        and(eq(schema.folders.id, folderId), eq(schema.folders.userId, userId)),
+      );
+
     if (!folder) throw new NotFoundException('Folder not found');
 
     return this.db
@@ -78,8 +91,8 @@ export class FoldersService {
       .where(
         and(
           eq(schema.sessions.folderId, folderId),
-          eq(schema.sessions.isDeleted, false)
-        )
+          eq(schema.sessions.isDeleted, false),
+        ),
       );
   }
 }

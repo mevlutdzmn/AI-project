@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 
 /**
  * ChatGPT-Style Deep Research Adapter
- * 
+ *
  * 5 Aşamalı Araştırma Pipeline:
  * 1. Understanding (10-30s) - Soruyu anlama ve analiz
  * 2. Planning (30-60s) - Araştırma planı oluşturma
@@ -14,37 +14,152 @@ import OpenAI from 'openai';
 
 // Türkçe kelimeler
 const TURKISH_WORDS = [
-  'bir', 'bu', 've', 'için', 'ile', 'de', 'da', 'ne', 'nedir', 'nasıl', 'kim', 'kimin',
-  'hangi', 'neden', 'niçin', 'ama', 'fakat', 'ancak', 'çünkü', 'eğer', 'gibi', 'kadar',
-  'daha', 'en', 'çok', 'az', 'var', 'yok', 'olan', 'olan', 'olarak', 'üzerine', 'hakkında',
-  'arasında', 'sonra', 'önce', 'bana', 'sana', 'ona', 'bize', 'size', 'onlara', 'ben',
-  'sen', 'o', 'biz', 'siz', 'onlar', 'şu', 'şey', 'zaman', 'yer', 'durum', 'konu',
-  'araştır', 'araştırma', 'incele', 'analiz', 'karşılaştır', 'açıkla', 'anlat',
-  'öğren', 'bilgi', 'detay', 'detaylı', 'kapsamlı', 'derinlemesine', 'tam',
-  'türkiye', 'istanbul', 'ankara', 'şehir', 'ülke', 'dünya', 'ekonomi', 'siyaset',
-  'tarih', 'kültür', 'sanat', 'bilim', 'teknoloji', 'sağlık', 'eğitim', 'spor',
-  'yaşam', 'güncel', 'haber', 'gelişme', 'değişim', 'etki', 'sonuç', 'sebep',
-  'özellik', 'avantaj', 'dezavantaj', 'fark', 'benzerlik', 'ilişki', 'bağlantı'
+  'bir',
+  'bu',
+  've',
+  'için',
+  'ile',
+  'de',
+  'da',
+  'ne',
+  'nedir',
+  'nasıl',
+  'kim',
+  'kimin',
+  'hangi',
+  'neden',
+  'niçin',
+  'ama',
+  'fakat',
+  'ancak',
+  'çünkü',
+  'eğer',
+  'gibi',
+  'kadar',
+  'daha',
+  'en',
+  'çok',
+  'az',
+  'var',
+  'yok',
+  'olan',
+  'olan',
+  'olarak',
+  'üzerine',
+  'hakkında',
+  'arasında',
+  'sonra',
+  'önce',
+  'bana',
+  'sana',
+  'ona',
+  'bize',
+  'size',
+  'onlara',
+  'ben',
+  'sen',
+  'o',
+  'biz',
+  'siz',
+  'onlar',
+  'şu',
+  'şey',
+  'zaman',
+  'yer',
+  'durum',
+  'konu',
+  'araştır',
+  'araştırma',
+  'incele',
+  'analiz',
+  'karşılaştır',
+  'açıkla',
+  'anlat',
+  'öğren',
+  'bilgi',
+  'detay',
+  'detaylı',
+  'kapsamlı',
+  'derinlemesine',
+  'tam',
+  'türkiye',
+  'istanbul',
+  'ankara',
+  'şehir',
+  'ülke',
+  'dünya',
+  'ekonomi',
+  'siyaset',
+  'tarih',
+  'kültür',
+  'sanat',
+  'bilim',
+  'teknoloji',
+  'sağlık',
+  'eğitim',
+  'spor',
+  'yaşam',
+  'güncel',
+  'haber',
+  'gelişme',
+  'değişim',
+  'etki',
+  'sonuç',
+  'sebep',
+  'özellik',
+  'avantaj',
+  'dezavantaj',
+  'fark',
+  'benzerlik',
+  'ilişki',
+  'bağlantı',
 ];
 
 // Farsça kelimeler
 const PERSIAN_WORDS = [
-  'چیست', 'چگونه', 'کجا', 'کی', 'چرا', 'است', 'هست', 'این', 'آن', 'که', 'را', 'با',
-  'از', 'به', 'در', 'برای', 'تا', 'یا', 'اما', 'ولی', 'اگر', 'زیرا', 'چون',
-  'بررسی', 'تحقیق', 'مقایسه', 'توضیح', 'شرح', 'تحلیل', 'ارزیابی'
+  'چیست',
+  'چگونه',
+  'کجا',
+  'کی',
+  'چرا',
+  'است',
+  'هست',
+  'این',
+  'آن',
+  'که',
+  'را',
+  'با',
+  'از',
+  'به',
+  'در',
+  'برای',
+  'تا',
+  'یا',
+  'اما',
+  'ولی',
+  'اگر',
+  'زیرا',
+  'چون',
+  'بررسی',
+  'تحقیق',
+  'مقایسه',
+  'توضیح',
+  'شرح',
+  'تحلیل',
+  'ارزیابی',
 ];
 
 function detectLanguage(text: string): 'tr' | 'fa' | 'en' {
   const lowerText = text.toLowerCase();
-  
+
   if (/[\u0600-\u06FF]/.test(text)) {
     return 'fa';
   }
-  
+
   if (/[çğıöşüÇĞİÖŞÜ]/.test(text)) {
     return 'tr';
   }
-  
+
   let turkishCount = 0;
   for (const word of TURKISH_WORDS) {
     if (lowerText.includes(word)) {
@@ -54,13 +169,13 @@ function detectLanguage(text: string): 'tr' | 'fa' | 'en' {
   if (turkishCount >= 2) {
     return 'tr';
   }
-  
+
   for (const word of PERSIAN_WORDS) {
     if (text.includes(word)) {
       return 'fa';
     }
   }
-  
+
   return 'en';
 }
 
@@ -76,26 +191,28 @@ const PROGRESS_MESSAGES = {
     stage1: {
       start: '🔍 Sorunuz analiz ediliyor...',
       analyzing: '📊 Anahtar kavramlar belirleniyor...',
-      done: '✅ Soru analizi tamamlandı'
+      done: '✅ Soru analizi tamamlandı',
     },
     stage2: {
       start: '📋 Araştırma planı oluşturuluyor...',
       planning: '🎯 Arama stratejileri belirleniyor...',
       queries: '📝 8 farklı arama sorgusu hazırlandı',
-      done: '✅ Araştırma planı hazır'
+      done: '✅ Araştırma planı hazır',
     },
     stage3: {
       start: '🌐 Web araması başlıyor...',
-      searching: (n: number, total: number) => `🔎 Arama ${n}/${total} yapılıyor...`,
+      searching: (n: number, total: number) =>
+        `🔎 Arama ${n}/${total} yapılıyor...`,
       found: (n: number) => `📄 ${n} kaynak bulundu`,
-      done: '✅ Tüm aramalar tamamlandı'
+      done: '✅ Tüm aramalar tamamlandı',
     },
     stage4: {
       start: '📖 Kaynaklar analiz ediliyor...',
-      reading: (n: number, total: number) => `📑 Kaynak ${n}/${total} okunuyor...`,
+      reading: (n: number, total: number) =>
+        `📑 Kaynak ${n}/${total} okunuyor...`,
       crossref: '🔗 Çapraz referans kontrolü yapılıyor...',
       conflicts: '⚠️ Çelişkili bilgiler tespit edildi, doğrulama yapılıyor...',
-      done: '✅ Kaynak analizi tamamlandı'
+      done: '✅ Kaynak analizi tamamlandı',
     },
     stage5: {
       start: '✍️ Rapor yazılıyor...',
@@ -103,33 +220,34 @@ const PROGRESS_MESSAGES = {
       writing: '📝 Detaylı içerik oluşturuluyor...',
       expanding: '📚 Rapor genişletiliyor (minimum 3000 kelime)...',
       citations: '📎 Kaynaklar ekleniyor...',
-      done: '✅ Araştırma raporu hazır!'
-    }
+      done: '✅ Araştırma raporu hazır!',
+    },
   },
   en: {
     stage1: {
       start: '🔍 Analyzing your question...',
       analyzing: '📊 Identifying key concepts...',
-      done: '✅ Question analysis complete'
+      done: '✅ Question analysis complete',
     },
     stage2: {
       start: '📋 Creating research plan...',
       planning: '🎯 Determining search strategies...',
       queries: '📝 8 different search queries prepared',
-      done: '✅ Research plan ready'
+      done: '✅ Research plan ready',
     },
     stage3: {
       start: '🌐 Starting web search...',
       searching: (n: number, total: number) => `🔎 Searching ${n}/${total}...`,
       found: (n: number) => `📄 Found ${n} sources`,
-      done: '✅ All searches completed'
+      done: '✅ All searches completed',
     },
     stage4: {
       start: '📖 Analyzing sources...',
-      reading: (n: number, total: number) => `📑 Reading source ${n}/${total}...`,
+      reading: (n: number, total: number) =>
+        `📑 Reading source ${n}/${total}...`,
       crossref: '🔗 Cross-referencing sources...',
       conflicts: '⚠️ Conflicting information detected, verifying...',
-      done: '✅ Source analysis complete'
+      done: '✅ Source analysis complete',
     },
     stage5: {
       start: '✍️ Writing report...',
@@ -137,33 +255,33 @@ const PROGRESS_MESSAGES = {
       writing: '📝 Generating detailed content...',
       expanding: '📚 Expanding report (minimum 3000 words)...',
       citations: '📎 Adding citations...',
-      done: '✅ Research report ready!'
-    }
+      done: '✅ Research report ready!',
+    },
   },
   fa: {
     stage1: {
       start: '🔍 در حال تحلیل سوال شما...',
       analyzing: '📊 در حال شناسایی مفاهیم کلیدی...',
-      done: '✅ تحلیل سوال کامل شد'
+      done: '✅ تحلیل سوال کامل شد',
     },
     stage2: {
       start: '📋 در حال ایجاد برنامه تحقیق...',
       planning: '🎯 در حال تعیین استراتژی‌های جستجو...',
       queries: '📝 ۸ پرس‌وجوی جستجوی مختلف آماده شد',
-      done: '✅ برنامه تحقیق آماده است'
+      done: '✅ برنامه تحقیق آماده است',
     },
     stage3: {
       start: '🌐 شروع جستجوی وب...',
       searching: (n: number, total: number) => `🔎 جستجوی ${n}/${total}...`,
       found: (n: number) => `📄 ${n} منبع یافت شد`,
-      done: '✅ همه جستجوها کامل شد'
+      done: '✅ همه جستجوها کامل شد',
     },
     stage4: {
       start: '📖 در حال تحلیل منابع...',
       reading: (n: number, total: number) => `📑 خواندن منبع ${n}/${total}...`,
       crossref: '🔗 در حال ارجاع متقابل منابع...',
       conflicts: '⚠️ اطلاعات متناقض شناسایی شد، در حال تأیید...',
-      done: '✅ تحلیل منابع کامل شد'
+      done: '✅ تحلیل منابع کامل شد',
     },
     stage5: {
       start: '✍️ در حال نوشتن گزارش...',
@@ -171,13 +289,13 @@ const PROGRESS_MESSAGES = {
       writing: '📝 در حال تولید محتوای جزئی...',
       expanding: '📚 در حال گسترش گزارش (حداقل ۳۰۰۰ کلمه)...',
       citations: '📎 در حال افزودن استنادات...',
-      done: '✅ گزارش تحقیق آماده است!'
-    }
-  }
+      done: '✅ گزارش تحقیق آماده است!',
+    },
+  },
 };
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export interface ResearchStep {
@@ -213,7 +331,7 @@ export class DeepResearchAdapter {
    */
   startResearch(query: string): { id: string; status: string } {
     const sessionId = `research-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const session: ResearchSession = {
       id: sessionId,
       query,
@@ -231,7 +349,7 @@ export class DeepResearchAdapter {
     this.sessions.set(sessionId, session);
 
     // Start research in background
-    this.executeResearch(sessionId).catch(err => {
+    this.executeResearch(sessionId).catch((err) => {
       console.error('Research execution error:', err);
       const s = this.sessions.get(sessionId);
       if (s) {
@@ -260,7 +378,7 @@ export class DeepResearchAdapter {
     session.status = 'in_progress';
 
     const onProgress = (stage: string, progress: number, message: string) => {
-      const step = session.steps.find(s => s.id === stage);
+      const step = session.steps.find((s) => s.id === stage);
       if (step) {
         step.status = progress >= 100 ? 'completed' : 'in_progress';
         step.message = message;
@@ -279,12 +397,16 @@ export class DeepResearchAdapter {
 
   async research(
     query: string,
-    onProgress?: (stage: string, progress: number, message: string) => void
+    onProgress?: (stage: string, progress: number, message: string) => void,
   ): Promise<string> {
     const language = detectLanguage(query);
     const msgs = PROGRESS_MESSAGES[language];
-    
-    const updateProgress = (stage: string, progress: number, message: string) => {
+
+    const updateProgress = (
+      stage: string,
+      progress: number,
+      message: string,
+    ) => {
       if (onProgress) {
         onProgress(stage, progress, message);
       }
@@ -295,7 +417,7 @@ export class DeepResearchAdapter {
       // STAGE 1: UNDERSTANDING (10-30 seconds)
       // ========================================
       updateProgress('understanding', 0, msgs.stage1.start);
-      
+
       const understandingResponse = await this.openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
@@ -317,18 +439,20 @@ Respond in JSON format:
   "relatedAreas": ["..."],
   "needsRecent": boolean,
   "context": "..."
-}`
+}`,
           },
-          { role: 'user', content: query }
+          { role: 'user', content: query },
         ],
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
       });
 
       updateProgress('understanding', 50, msgs.stage1.analyzing);
-      
+
       let questionAnalysis: any;
       try {
-        questionAnalysis = JSON.parse(understandingResponse.choices[0].message.content || '{}');
+        questionAnalysis = JSON.parse(
+          understandingResponse.choices[0].message.content || '{}',
+        );
       } catch {
         questionAnalysis = {
           mainTopic: query,
@@ -336,7 +460,7 @@ Respond in JSON format:
           infoType: 'general',
           relatedAreas: [],
           needsRecent: true,
-          context: ''
+          context: '',
         };
       }
 
@@ -377,36 +501,66 @@ Respond in JSON:
   "keyTerms": ["..."],
   "biasesToWatch": ["..."],
   "qualityIndicators": ["..."]
-}`
+}`,
           },
           {
             role: 'user',
-            content: `Question: ${query}\n\nAnalysis: ${JSON.stringify(questionAnalysis)}`
-          }
+            content: `Question: ${query}\n\nAnalysis: ${JSON.stringify(questionAnalysis)}`,
+          },
         ],
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
       });
 
       updateProgress('planning', 50, msgs.stage2.planning);
 
       let researchPlan: any;
       try {
-        researchPlan = JSON.parse(planningResponse.choices[0].message.content || '{}');
+        researchPlan = JSON.parse(
+          planningResponse.choices[0].message.content || '{}',
+        );
       } catch {
         researchPlan = {
           searchQueries: [
             { query: query, purpose: 'main', targetSources: 'general' },
-            { query: `${query} recent developments`, purpose: 'news', targetSources: 'news' },
-            { query: `${query} expert analysis`, purpose: 'analysis', targetSources: 'academic' },
-            { query: `${query} comparison`, purpose: 'comparison', targetSources: 'general' },
-            { query: `${query} statistics data`, purpose: 'data', targetSources: 'statistics' },
-            { query: `${query} case studies`, purpose: 'examples', targetSources: 'academic' },
-            { query: `${query} pros cons`, purpose: 'evaluation', targetSources: 'general' },
-            { query: `${query} future trends`, purpose: 'future', targetSources: 'news' }
+            {
+              query: `${query} recent developments`,
+              purpose: 'news',
+              targetSources: 'news',
+            },
+            {
+              query: `${query} expert analysis`,
+              purpose: 'analysis',
+              targetSources: 'academic',
+            },
+            {
+              query: `${query} comparison`,
+              purpose: 'comparison',
+              targetSources: 'general',
+            },
+            {
+              query: `${query} statistics data`,
+              purpose: 'data',
+              targetSources: 'statistics',
+            },
+            {
+              query: `${query} case studies`,
+              purpose: 'examples',
+              targetSources: 'academic',
+            },
+            {
+              query: `${query} pros cons`,
+              purpose: 'evaluation',
+              targetSources: 'general',
+            },
+            {
+              query: `${query} future trends`,
+              purpose: 'future',
+              targetSources: 'news',
+            },
           ],
           keyTerms: [],
           biasesToWatch: [],
-          qualityIndicators: []
+          qualityIndicators: [],
         };
       }
 
@@ -423,12 +577,16 @@ Respond in JSON:
       const searchResults: SearchResult[] = [];
       const queries = researchPlan.searchQueries || [];
       const totalQueries = Math.min(queries.length, 8);
-      
+
       for (let i = 0; i < totalQueries; i++) {
         const searchQuery = queries[i];
         const progress = Math.round(((i + 1) / totalQueries) * 80);
-        
-        updateProgress('searching', progress, msgs.stage3.searching(i + 1, totalQueries));
+
+        updateProgress(
+          'searching',
+          progress,
+          msgs.stage3.searching(i + 1, totalQueries),
+        );
 
         try {
           // OpenAI Responses API with web_search_preview
@@ -436,7 +594,7 @@ Respond in JSON:
             model: 'gpt-4o',
             tools: [{ type: 'web_search_preview' }],
             input: searchQuery.query || searchQuery,
-            tool_choice: { type: 'web_search_preview' }
+            tool_choice: { type: 'web_search_preview' },
           });
 
           const output = searchResponse.output || [];
@@ -463,7 +621,7 @@ Respond in JSON:
                       webResults.push({
                         title: ann.title || ann.url,
                         url: ann.url,
-                        snippet: ''
+                        snippet: '',
                       });
                     }
                   }
@@ -475,9 +633,8 @@ Respond in JSON:
           searchResults.push({
             query: searchQuery.query || searchQuery,
             results: webResults,
-            summary: searchSummary
+            summary: searchSummary,
           });
-
         } catch (error) {
           console.error(`Search error for query ${i + 1}:`, error);
         }
@@ -485,7 +642,10 @@ Respond in JSON:
         await delay(500);
       }
 
-      const totalSources = searchResults.reduce((acc, sr) => acc + sr.results.length, 0);
+      const totalSources = searchResults.reduce(
+        (acc, sr) => acc + sr.results.length,
+        0,
+      );
       updateProgress('searching', 90, msgs.stage3.found(totalSources));
       await delay(500);
       updateProgress('searching', 100, msgs.stage3.done);
@@ -501,7 +661,7 @@ Respond in JSON:
         query: sr.query,
         summary: sr.summary,
         sourceCount: sr.results.length,
-        sources: sr.results.slice(0, 5)
+        sources: sr.results.slice(0, 5),
       }));
 
       updateProgress('analyzing', 30, msgs.stage4.reading(1, 2));
@@ -531,21 +691,23 @@ Provide a comprehensive analysis in JSON:
   "gaps": ["..."],
   "mostReliableSources": ["..."],
   "overallConfidence": "high|medium|low"
-}`
+}`,
           },
           {
             role: 'user',
-            content: `Original Question: ${query}\n\nSearch Results:\n${JSON.stringify(allSearchData, null, 2)}`
-          }
+            content: `Original Question: ${query}\n\nSearch Results:\n${JSON.stringify(allSearchData, null, 2)}`,
+          },
         ],
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
       });
 
       updateProgress('analyzing', 60, msgs.stage4.crossref);
 
       let analysis: any;
       try {
-        analysis = JSON.parse(analysisResponse.choices[0].message.content || '{}');
+        analysis = JSON.parse(
+          analysisResponse.choices[0].message.content || '{}',
+        );
       } catch {
         analysis = {
           keyFindings: [],
@@ -555,7 +717,7 @@ Provide a comprehensive analysis in JSON:
           perspectives: [],
           gaps: [],
           mostReliableSources: [],
-          overallConfidence: 'medium'
+          overallConfidence: 'medium',
         };
       }
 
@@ -575,15 +737,23 @@ Provide a comprehensive analysis in JSON:
       const allSources: Array<{ title: string; url: string }> = [];
       for (const sr of searchResults) {
         for (const source of sr.results) {
-          if (source.url && !allSources.find(s => s.url === source.url)) {
-            allSources.push({ title: source.title || source.url, url: source.url });
+          if (source.url && !allSources.find((s) => s.url === source.url)) {
+            allSources.push({
+              title: source.title || source.url,
+              url: source.url,
+            });
           }
         }
       }
 
       updateProgress('synthesizing', 20, msgs.stage5.outline);
 
-      const reportLanguage = language === 'tr' ? 'Turkish' : language === 'fa' ? 'Persian (Farsi)' : 'English';
+      const reportLanguage =
+        language === 'tr'
+          ? 'Turkish'
+          : language === 'fa'
+            ? 'Persian (Farsi)'
+            : 'English';
 
       const synthesisPrompt = `You are an expert research report writer. Write a comprehensive, well-structured research report.
 
@@ -638,16 +808,23 @@ MANDATORY REPORT STRUCTURE:
 ---
 
 AVAILABLE SOURCES (use these for inline citations):
-${allSources.slice(0, 20).map(s => `- ${s.title}: ${s.url}`).join('\n')}
+${allSources
+  .slice(0, 20)
+  .map((s) => `- ${s.title}: ${s.url}`)
+  .join('\n')}
 
 ORIGINAL QUESTION: ${query}
 
 RESEARCH DATA:
-${JSON.stringify({
-  questionAnalysis,
-  searchResults: allSearchData,
-  analysis
-}, null, 2)}
+${JSON.stringify(
+  {
+    questionAnalysis,
+    searchResults: allSearchData,
+    analysis,
+  },
+  null,
+  2,
+)}
 
 Remember: Write EVERYTHING in ${reportLanguage}. Use INLINE citations throughout. Minimum 3000 words.`;
 
@@ -656,10 +833,14 @@ Remember: Write EVERYTHING in ${reportLanguage}. Use INLINE citations throughout
       const reportResponse = await this.openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
-          { role: 'system', content: 'You are an expert research report writer who creates comprehensive, detailed reports.' },
-          { role: 'user', content: synthesisPrompt }
+          {
+            role: 'system',
+            content:
+              'You are an expert research report writer who creates comprehensive, detailed reports.',
+          },
+          { role: 'user', content: synthesisPrompt },
         ],
-        max_tokens: 16000
+        max_tokens: 16000,
       });
 
       let report = reportResponse.choices[0].message.content || '';
@@ -667,7 +848,7 @@ Remember: Write EVERYTHING in ${reportLanguage}. Use INLINE citations throughout
       updateProgress('synthesizing', 70, msgs.stage5.writing);
 
       const wordCount = report.split(/\s+/).length;
-      
+
       if (wordCount < 2500) {
         updateProgress('synthesizing', 80, msgs.stage5.expanding);
 
@@ -676,14 +857,14 @@ Remember: Write EVERYTHING in ${reportLanguage}. Use INLINE citations throughout
           messages: [
             {
               role: 'system',
-              content: `You are expanding a research report. Add more detail, examples, analysis, and depth to each section. Write in ${reportLanguage}.`
+              content: `You are expanding a research report. Add more detail, examples, analysis, and depth to each section. Write in ${reportLanguage}.`,
             },
             {
               role: 'user',
-              content: `Expand this report to at least 3000 words. Add more specific details, examples, data points, and analysis to EACH section. Keep the same structure but make each section much more comprehensive:\n\n${report}`
-            }
+              content: `Expand this report to at least 3000 words. Add more specific details, examples, data points, and analysis to EACH section. Keep the same structure but make each section much more comprehensive:\n\n${report}`,
+            },
           ],
-          max_tokens: 16000
+          max_tokens: 16000,
         });
 
         report = expansionResponse.choices[0].message.content || report;
@@ -691,26 +872,38 @@ Remember: Write EVERYTHING in ${reportLanguage}. Use INLINE citations throughout
 
       updateProgress('synthesizing', 90, msgs.stage5.citations);
 
-      if (!report.includes('## Sources') && !report.includes('## Kaynaklar') && !report.includes('## منابع')) {
-        const sourcesHeader = language === 'tr' ? '## Kaynaklar' : language === 'fa' ? '## منابع' : '## Sources';
-        const sourcesSection = `\n\n${sourcesHeader}\n\n` + 
-          allSources.slice(0, 15).map((s, i) => `${i + 1}. [${s.title}](${s.url})`).join('\n');
+      if (
+        !report.includes('## Sources') &&
+        !report.includes('## Kaynaklar') &&
+        !report.includes('## منابع')
+      ) {
+        const sourcesHeader =
+          language === 'tr'
+            ? '## Kaynaklar'
+            : language === 'fa'
+              ? '## منابع'
+              : '## Sources';
+        const sourcesSection =
+          `\n\n${sourcesHeader}\n\n` +
+          allSources
+            .slice(0, 15)
+            .map((s, i) => `${i + 1}. [${s.title}](${s.url})`)
+            .join('\n');
         report += sourcesSection;
       }
 
       updateProgress('synthesizing', 100, msgs.stage5.done);
 
       return report;
-
     } catch (error) {
       console.error('Deep Research Error:', error);
-      
+
       const errorMessages = {
         tr: '❌ Araştırma sırasında bir hata oluştu. Lütfen tekrar deneyin.',
         en: '❌ An error occurred during research. Please try again.',
-        fa: '❌ خطایی در حین تحقیق رخ داد. لطفا دوباره امتحان کنید.'
+        fa: '❌ خطایی در حین تحقیق رخ داد. لطفا دوباره امتحان کنید.',
       };
-      
+
       throw new Error(errorMessages[language]);
     }
   }

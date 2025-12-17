@@ -20,12 +20,17 @@ export class AudioService {
   /**
    * Whisper STT - Ses dosyasını metne çevir
    */
-  async transcribeAudio(audioBuffer: Buffer, filename: string): Promise<string> {
+  async transcribeAudio(
+    audioBuffer: Buffer,
+    filename: string,
+  ): Promise<string> {
     if (!this.client) {
       throw new Error('OpenAI client not initialized');
     }
 
-    this.logger.log(`[Whisper] Transcribing audio: ${filename}, size: ${audioBuffer.length} bytes`);
+    this.logger.log(
+      `[Whisper] Transcribing audio: ${filename}, size: ${audioBuffer.length} bytes`,
+    );
 
     try {
       // Create a File-like object from Uint8Array (Buffer compatibility)
@@ -40,7 +45,9 @@ export class AudioService {
         response_format: 'text',
       });
 
-      this.logger.log(`[Whisper] Transcription complete: "${String(response).substring(0, 100)}..."`);
+      this.logger.log(
+        `[Whisper] Transcription complete: "${String(response).substring(0, 100)}..."`,
+      );
       return String(response);
     } catch (error: any) {
       this.logger.error(`[Whisper] Transcription failed: ${error.message}`);
@@ -60,7 +67,9 @@ export class AudioService {
       throw new Error('OpenAI client not initialized');
     }
 
-    this.logger.log(`[TTS] Speaking text (${text.length} chars) with voice: ${voice}, model: ${model}`);
+    this.logger.log(
+      `[TTS] Speaking text (${text.length} chars) with voice: ${voice}, model: ${model}`,
+    );
 
     try {
       const response = await this.client.audio.speech.create({

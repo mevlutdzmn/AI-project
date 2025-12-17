@@ -5,8 +5,8 @@ import { multerConfig } from './multer.config';
 import { UploadService } from './upload.service';
 
 @Module({
-    imports: [MulterModule.register(multerConfig)],
-    controllers: [UploadController],
-    providers: [UploadService],
+  imports: [MulterModule.register(multerConfig)],
+  controllers: [UploadController],
+  providers: [UploadService],
 })
-export class FilesModule { }
+export class FilesModule {}

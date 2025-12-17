@@ -11,28 +11,28 @@ import { CodeInterpreterTool } from './tools/code-interpreter.tool';
 import { CanvasTool } from './tools/canvas.tool';
 
 @Module({
-    imports: [UsersModule],
-    providers: [
-        OpenAIAdapter,
-        DalleAdapter,
-        SearchAdapter,
-        DeepResearchAdapter,
-        ImageGenerationTool,
-        WebSearchTool,
-        DeepResearchTool,
-        CodeInterpreterTool,
-        CanvasTool,
-    ],
-    exports: [
-        OpenAIAdapter,
-        DalleAdapter,
-        SearchAdapter,
-        DeepResearchAdapter,
-        ImageGenerationTool,
-        WebSearchTool,
-        DeepResearchTool,
-        CodeInterpreterTool,
-        CanvasTool,
-    ],
+  imports: [UsersModule],
+  providers: [
+    OpenAIAdapter,
+    DalleAdapter,
+    SearchAdapter,
+    DeepResearchAdapter,
+    ImageGenerationTool,
+    WebSearchTool,
+    DeepResearchTool,
+    CodeInterpreterTool,
+    CanvasTool,
+  ],
+  exports: [
+    OpenAIAdapter,
+    DalleAdapter,
+    SearchAdapter,
+    DeepResearchAdapter,
+    ImageGenerationTool,
+    WebSearchTool,
+    DeepResearchTool,
+    CodeInterpreterTool,
+    CanvasTool,
+  ],
 })
-export class AIModule { }
+export class AIModule {}

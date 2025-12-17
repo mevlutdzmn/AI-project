@@ -15,18 +15,18 @@ export class RealtimeController {
   @Post('session')
   async createSession(@Req() req: Request, @Res() res: Response) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    
+
     if (!apiKey) {
       this.logger.error('Missing OPENAI_API_KEY');
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ 
-        error: 'Missing server OPENAI_API_KEY' 
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: 'Missing server OPENAI_API_KEY',
       });
     }
 
     try {
       const contentType = req.headers['content-type'] || 'application/json';
       let bodyText: string;
-      
+
       if (typeof req.body === 'string') {
         bodyText = req.body;
       } else if (Buffer.isBuffer(req.body)) {
@@ -38,8 +38,9 @@ export class RealtimeController {
       this.logger.debug(`Creating session, body_len: ${bodyText.length}`);
 
       // ✅ WebRTC için doğru endpoint
-      const openaiUrl = 'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17';
-      
+      const openaiUrl =
+        'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17';
+
       // SDP'yi parse et
       let sdp: string;
       try {
@@ -59,7 +60,7 @@ export class RealtimeController {
       const response = await fetch(openaiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/sdp',
         },
         body: sdp,
@@ -68,7 +69,9 @@ export class RealtimeController {
       const respText = await response.text();
       this.logger.debug(`OpenAI response status: ${response.status}`);
       if (response.status !== 200 && response.status !== 201) {
-        this.logger.warn(`OpenAI error response: ${respText.substring(0, 500)}`);
+        this.logger.warn(
+          `OpenAI error response: ${respText.substring(0, 500)}`,
+        );
       }
 
       // Headers'ı kopyala

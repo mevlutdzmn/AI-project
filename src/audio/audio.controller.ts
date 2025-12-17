@@ -37,10 +37,21 @@ export class AudioController {
       limits: { fileSize: MAX_FILE_SIZE },
       fileFilter: (req, file, cb) => {
         // Accept common audio formats
-        const allowedExtensions = ['webm', 'wav', 'mp3', 'mpeg', 'ogg', 'mp4', 'm4a', 'flac'];
+        const allowedExtensions = [
+          'webm',
+          'wav',
+          'mp3',
+          'mpeg',
+          'ogg',
+          'mp4',
+          'm4a',
+          'flac',
+        ];
         const ext = file.originalname?.split('.').pop()?.toLowerCase() || '';
-        const mimeOk = file.mimetype.startsWith('audio/') || allowedExtensions.some(e => file.mimetype.includes(e));
-        
+        const mimeOk =
+          file.mimetype.startsWith('audio/') ||
+          allowedExtensions.some((e) => file.mimetype.includes(e));
+
         if (mimeOk || allowedExtensions.includes(ext)) {
           cb(null, true);
         } else {
@@ -71,7 +82,10 @@ export class AudioController {
     }
 
     try {
-      const text = await this.audioService.transcribeAudio(file.buffer, file.originalname || 'audio.webm');
+      const text = await this.audioService.transcribeAudio(
+        file.buffer,
+        file.originalname || 'audio.webm',
+      );
       return { text };
     } catch (error: any) {
       console.error('[Transcribe] Error:', error);
@@ -110,7 +124,11 @@ export class AudioController {
     const selectedVoice = voice || 'alloy';
 
     try {
-      const audioBuffer = await this.audioService.speakText(text, selectedVoice, ttsModel);
+      const audioBuffer = await this.audioService.speakText(
+        text,
+        selectedVoice,
+        ttsModel,
+      );
 
       res.set({
         'Content-Type': 'audio/mpeg',

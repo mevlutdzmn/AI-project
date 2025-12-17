@@ -30,6 +30,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.0.0",
     "@nestjs/throttler": "^6.0.0",
+    "@sentry/node": "^10.31.0",
     "@supabase/supabase-js": "^2.86.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",

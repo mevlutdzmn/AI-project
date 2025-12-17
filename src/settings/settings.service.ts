@@ -1,8 +1,8 @@
-import { Inject, Injectable } from "@nestjs/common";
-import { DRIZZLE } from "../database/drizzle.provider";
-import { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import * as schema from "../database/schema";
-import { eq } from "drizzle-orm";
+import { Inject, Injectable } from '@nestjs/common';
+import { DRIZZLE } from '../database/drizzle.provider';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import * as schema from '../database/schema';
+import { eq } from 'drizzle-orm';
 
 interface UpdateSettingsDto {
   theme?: string;
@@ -16,9 +16,7 @@ interface UpdateSettingsDto {
 
 @Injectable()
 export class SettingsService {
-  constructor(
-    @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
-  ) {}
+  constructor(@Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>) {}
 
   async getSettings(userId: number) {
     // Önce var olan ayarları bul
@@ -35,8 +33,8 @@ export class SettingsService {
           .insert(schema.user_settings)
           .values({
             userId,
-            theme: "dark",
-            language: "fa",
+            theme: 'dark',
+            language: 'fa',
             showExtraModels: false,
             emailNotifications: true,
             browserNotifications: false,
@@ -49,7 +47,7 @@ export class SettingsService {
         if (newSettings.length > 0) {
           return newSettings[0];
         }
-        
+
         // onConflictDoNothing çalıştıysa, kaydı tekrar çek
         settings = await this.db
           .select()
@@ -83,8 +81,8 @@ export class SettingsService {
         .insert(schema.user_settings)
         .values({
           userId,
-          theme: updateData.theme ?? "dark",
-          language: updateData.language ?? "fa",
+          theme: updateData.theme ?? 'dark',
+          language: updateData.language ?? 'fa',
           showExtraModels: updateData.showExtraModels ?? false,
           emailNotifications: updateData.emailNotifications ?? true,
           browserNotifications: updateData.browserNotifications ?? false,
@@ -114,6 +112,6 @@ export class SettingsService {
       .delete(schema.user_settings)
       .where(eq(schema.user_settings.userId, userId));
 
-    return { message: "Settings deleted" };
+    return { message: 'Settings deleted' };
   }
 }

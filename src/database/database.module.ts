@@ -4,8 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 
 @Global()
 @Module({
-    imports: [ConfigModule],
-    providers: [drizzleProvider],
-    exports: [drizzleProvider],
+  imports: [ConfigModule],
+  providers: [drizzleProvider],
+  exports: [drizzleProvider],
 })
-export class DatabaseModule { }
+export class DatabaseModule {}

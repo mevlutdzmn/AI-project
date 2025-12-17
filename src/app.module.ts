@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -20,6 +20,8 @@ import { FoldersModule } from './folders/folders.module';
 import { UsageModule } from './usage/usage.module';
 import { AudioModule } from './audio/audio.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { HealthModule } from './health/health.module';
+import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import openaiConfig from './config/openai.config';
@@ -56,13 +58,14 @@ import { validationSchema } from './config/env.validation';
     UsageModule,
     AudioModule,
     RealtimeModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: RateLimitGuard, // Custom rate limiting with per-endpoint limits
     },
   ],
 })
