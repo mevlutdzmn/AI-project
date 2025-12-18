@@ -5,6 +5,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
+import { CacheModule } from './cache/cache.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -43,6 +44,7 @@ import { validationSchema } from './config/env.validation';
       },
     ]),
     DatabaseModule,
+    CacheModule, // ✅ Redis/Memory cache support
     AuthModule,
     UsersModule,
     NotificationsModule,

@@ -66,8 +66,8 @@ describe('RateLimitGuard', () => {
     it('should block requests over the limit', () => {
       const context = mockExecutionContext('192.168.1.1', '/auth/login');
 
-      // Auth endpoints have 10 req/min limit
-      for (let i = 0; i < 10; i++) {
+      // Auth login endpoints have 5 req/min limit
+      for (let i = 0; i < 5; i++) {
         guard.canActivate(context);
       }
 
@@ -75,11 +75,11 @@ describe('RateLimitGuard', () => {
     });
 
     it('should track different IPs separately', () => {
-      const context1 = mockExecutionContext('192.168.1.1');
-      const context2 = mockExecutionContext('192.168.1.2');
+      const context1 = mockExecutionContext('192.168.1.1', '/api/v1/test');
+      const context2 = mockExecutionContext('192.168.1.2', '/api/v1/test');
 
-      // Exhaust limit for IP1
-      for (let i = 0; i < 100; i++) {
+      // Exhaust limit for IP1 (default: 60 req/min)
+      for (let i = 0; i < 60; i++) {
         guard.canActivate(context1);
       }
 
@@ -89,16 +89,16 @@ describe('RateLimitGuard', () => {
 
     it('should apply different limits for different paths', () => {
       const authContext = mockExecutionContext('10.0.0.1', '/auth/login');
-      const chatContext = mockExecutionContext('10.0.0.2', '/chat/stream');
+      const streamContext = mockExecutionContext('10.0.0.2', '/chat/stream');
 
-      // Auth has 10 req/min
-      for (let i = 0; i < 10; i++) {
+      // Auth login has 5 req/min
+      for (let i = 0; i < 5; i++) {
         expect(guard.canActivate(authContext)).toBe(true);
       }
 
-      // Chat has 30 req/min
-      for (let i = 0; i < 30; i++) {
-        expect(guard.canActivate(chatContext)).toBe(true);
+      // Stream has 20 req/min
+      for (let i = 0; i < 20; i++) {
+        expect(guard.canActivate(streamContext)).toBe(true);
       }
     });
   });
@@ -107,8 +107,8 @@ describe('RateLimitGuard', () => {
     it('should identify auth endpoints', () => {
       const context = mockExecutionContext('1.1.1.1', '/auth/login');
 
-      // Auth limit is 10
-      for (let i = 0; i < 10; i++) {
+      // Auth login limit is 5
+      for (let i = 0; i < 5; i++) {
         guard.canActivate(context);
       }
 
@@ -116,10 +116,10 @@ describe('RateLimitGuard', () => {
     });
 
     it('should identify deep-research endpoints', () => {
-      const context = mockExecutionContext('2.2.2.2', '/deep-research/start');
+      const context = mockExecutionContext('2.2.2.2', '/research/start');
 
-      // Research limit is 5
-      for (let i = 0; i < 5; i++) {
+      // Research limit is 3
+      for (let i = 0; i < 3; i++) {
         guard.canActivate(context);
       }
 

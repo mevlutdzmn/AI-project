@@ -76,7 +76,7 @@ async function bootstrap() {
   );
 
   app.use(`/${prefix}/payments/webhook`, raw({ type: 'application/json' }));
-  
+
   app.use(json({ limit: '10mb' })); // ✅ Security: 50MB'dan 10MB'a düşürüldü
 
   // ✅ Security: Helmet with basic CSP

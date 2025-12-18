@@ -1,4 +1,12 @@
-import { Controller, Post, Get, Req, Res, HttpStatus, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Req,
+  Res,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 
@@ -27,20 +35,23 @@ export class RealtimeController {
       this.logger.debug('Creating ephemeral token for Realtime API...');
 
       // OpenAI'dan ephemeral token al
-      const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        'https://api.openai.com/v1/realtime/sessions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-realtime-preview-2024-12-17',
+            voice: 'alloy',
+          }),
         },
-        body: JSON.stringify({
-          model: 'gpt-4o-realtime-preview-2024-12-17',
-          voice: 'alloy',
-        }),
-      });
+      );
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         this.logger.error(`OpenAI token error: ${JSON.stringify(data)}`);
         return res.status(response.status).json(data);

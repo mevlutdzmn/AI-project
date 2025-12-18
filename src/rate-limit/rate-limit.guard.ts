@@ -33,15 +33,40 @@ export const RATE_LIMIT_KEY = 'rateLimit';
 
 /**
  * Default rate limit configurations per endpoint type
+ * ✅ Professional production-ready limits
  */
 const DEFAULT_LIMITS: Record<string, RateLimitConfig> = {
-  default: { windowMs: 60000, maxRequests: 100 }, // 100 req/min
-  auth: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for auth
-  chat: { windowMs: 60000, maxRequests: 30 }, // 30 req/min for chat
-  research: { windowMs: 60000, maxRequests: 5 }, // 5 req/min for deep research
+  // 🔒 Authentication - strict to prevent brute force
+  auth: { windowMs: 60000, maxRequests: 5 }, // 5 req/min for login/register
+  'auth-verify': { windowMs: 60000, maxRequests: 3 }, // 3 req/min for verify/reset
+
+  // 💬 Chat endpoints - moderate
+  chat: { windowMs: 60000, maxRequests: 30 }, // 30 req/min for chat messages
+  stream: { windowMs: 60000, maxRequests: 20 }, // 20 req/min for streaming
+
+  // 🔬 AI-heavy operations - expensive, strict limits
+  research: { windowMs: 60000, maxRequests: 3 }, // 3 req/min for deep research
+  image: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for image generation
+  realtime: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for voice chat
+
+  // 📁 File operations
   upload: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for uploads
+
+  // 🔊 Audio processing
   tts: { windowMs: 60000, maxRequests: 20 }, // 20 req/min for TTS
-  admin: { windowMs: 60000, maxRequests: 50 }, // 50 req/min for admin
+  transcribe: { windowMs: 60000, maxRequests: 15 }, // 15 req/min for transcription
+
+  // 👨‍💼 Admin operations - moderate (trusted users)
+  admin: { windowMs: 60000, maxRequests: 100 }, // 100 req/min for admin
+
+  // 💳 Payment operations - strict for security
+  payment: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for payments
+
+  // 🏥 Health checks - high limit for monitoring
+  health: { windowMs: 60000, maxRequests: 300 }, // 300 req/min for health checks
+
+  // 📊 General API
+  default: { windowMs: 60000, maxRequests: 60 }, // 60 req/min default
 };
 
 @Injectable()
@@ -138,14 +163,57 @@ export class RateLimitGuard implements CanActivate {
 
   /**
    * Determine rate limit type based on request path
+   * ✅ Comprehensive endpoint matching
    */
   private getLimitType(path: string): string {
+    // 🔒 Auth endpoints (strict)
+    if (path.includes('/auth/login') || path.includes('/auth/register'))
+      return 'auth';
+    if (
+      path.includes('/auth/verify') ||
+      path.includes('/auth/reset') ||
+      path.includes('/auth/forgot')
+    )
+      return 'auth-verify';
     if (path.includes('/auth/')) return 'auth';
-    if (path.includes('/chat/') || path.includes('/stream')) return 'chat';
-    if (path.includes('/deep-research')) return 'research';
+
+    // 💬 Chat endpoints
+    if (path.includes('/stream')) return 'stream';
+    if (path.includes('/chat/')) return 'chat';
+
+    // 🔬 AI-heavy operations
+    if (path.includes('/research') || path.includes('/deep-research'))
+      return 'research';
+    if (
+      path.includes('/image') ||
+      path.includes('/generate') ||
+      path.includes('/dalle')
+    )
+      return 'image';
+    if (path.includes('/realtime')) return 'realtime';
+
+    // 📁 File operations
     if (path.includes('/upload') || path.includes('/files')) return 'upload';
-    if (path.includes('/audio/') || path.includes('/tts')) return 'tts';
+
+    // 🔊 Audio processing
+    if (path.includes('/speak') || path.includes('/tts')) return 'tts';
+    if (path.includes('/transcribe') || path.includes('/audio'))
+      return 'transcribe';
+
+    // 👨‍💼 Admin operations
     if (path.includes('/admin/')) return 'admin';
+
+    // 💳 Payment operations
+    if (
+      path.includes('/payment') ||
+      path.includes('/stripe') ||
+      path.includes('/zarinpal')
+    )
+      return 'payment';
+
+    // 🏥 Health checks
+    if (path.includes('/health')) return 'health';
+
     return 'default';
   }
 
