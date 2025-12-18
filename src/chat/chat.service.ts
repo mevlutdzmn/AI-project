@@ -2432,4 +2432,113 @@ Summary of the work done and final output
       assistantMessageId: assistantMsg.id,
     };
   }
+
+  // =====================================================
+  // 🎤 Voice/AI Helper Methods - Frontend Proxy için
+  // =====================================================
+
+  /**
+   * Generate chat title from conversation
+   * Used by frontend proxy
+   */
+  async generateChatTitle(
+    message?: string,
+    messageList?: Array<{ role: string; content: string }>,
+  ): Promise<{ title: string }> {
+    try {
+      const conversationText = messageList
+        ? messageList.map((m) => `${m.role}: ${m.content}`).join('\n')
+        : message;
+
+      if (!conversationText) {
+        return { title: 'گفتگوی جدید' };
+      }
+
+      const title = await this.generateTitleWithAI(conversationText);
+      return { title: title || 'گفتگوی جدید' };
+    } catch (error) {
+      this.logger.error('[generateChatTitle] Error:', error.message);
+      return { title: 'گفتگوی جدید' };
+    }
+  }
+
+  /**
+   * Cleanup STT transcript with LLM
+   * Fixes speech-to-text errors while preserving meaning
+   */
+  async cleanupSTTText(
+    text: string,
+    language?: string,
+  ): Promise<{ cleaned: string; original: string; wasFixed: boolean }> {
+    try {
+      if (!text || text.length < 5) {
+        return { cleaned: text, original: text, wasFixed: false };
+      }
+
+      const response = await this.openai.chat(
+        [
+          {
+            role: 'system',
+            content: `You are a speech-to-text error corrector. Your ONLY job is to fix transcription errors.
+
+RULES:
+1. Fix spelling mistakes caused by speech recognition
+2. Fix grammar errors that don't make sense
+3. Keep the EXACT same meaning and intent
+4. Keep the SAME language as input (Turkish stays Turkish, English stays English, Persian stays Persian)
+5. Do NOT add or remove information
+6. Do NOT change the tone or style
+7. Do NOT translate to another language
+8. If the text is already correct, return it unchanged
+9. Return ONLY the corrected text, nothing else`,
+          },
+          { role: 'user', content: text },
+        ],
+        'gpt-4o-mini',
+      );
+
+      const cleaned = response?.trim() || text;
+      return {
+        cleaned,
+        original: text,
+        wasFixed: cleaned !== text,
+      };
+    } catch (error) {
+      this.logger.error('[cleanupSTTText] Error:', error.message);
+      return { cleaned: text, original: text, wasFixed: false };
+    }
+  }
+
+  /**
+   * Quick chat response for voice interactions
+   * Uses fast model for instant responses
+   */
+  async quickChatResponse(
+    message: string,
+    systemPrompt?: string,
+  ): Promise<{ response: string }> {
+    try {
+      if (!message) {
+        return { response: '' };
+      }
+
+      const response = await this.openai.chat(
+        [
+          {
+            role: 'system',
+            content:
+              systemPrompt ||
+              'Her zaman kullanıcının dilinde cevap ver. Kısa ve öz ol.',
+          },
+          { role: 'user', content: message },
+        ],
+        'gpt-4o-mini',
+      );
+
+      return { response: response || '' };
+    } catch (error) {
+      this.logger.error('[quickChatResponse] Error:', error.message);
+      return { response: '' };
+    }
+  }
 }

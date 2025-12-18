@@ -442,4 +442,29 @@ export class ChatController {
       assistantMessage,
     );
   }
+
+  // =====================================================
+  // 🎤 Voice/AI Helper Endpoints - Frontend Proxy için
+  // =====================================================
+
+  @Post('title')
+  @ApiOperation({ summary: 'Generate chat title from conversation' })
+  @ApiResponse({ status: 200, description: 'Returns generated title' })
+  async generateTitle(@Body() body: { message?: string; messages?: Array<{ role: string; content: string }> }) {
+    return this.chatService.generateChatTitle(body.message, body.messages);
+  }
+
+  @Post('cleanup')
+  @ApiOperation({ summary: 'Cleanup STT transcript with LLM' })
+  @ApiResponse({ status: 200, description: 'Returns cleaned text' })
+  async cleanupTranscript(@Body() body: { text: string; language?: string }) {
+    return this.chatService.cleanupSTTText(body.text, body.language);
+  }
+
+  @Post('quick')
+  @ApiOperation({ summary: 'Quick chat response (for voice)' })
+  @ApiResponse({ status: 200, description: 'Returns AI response' })
+  async quickChat(@Body() body: { message: string; systemPrompt?: string }) {
+    return this.chatService.quickChatResponse(body.message, body.systemPrompt);
+  }
 }
