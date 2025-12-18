@@ -2,13 +2,16 @@ import {
   Controller,
   Post,
   Get,
+  Body,
   Req,
   Res,
   HttpStatus,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('realtime')
 export class RealtimeController {
@@ -76,5 +79,59 @@ export class RealtimeController {
   async createSession(@Req() req: Request, @Res() res: Response) {
     // Token endpoint'ine yönlendir
     return this.getToken(req, res);
+  }
+
+  /**
+   * POST /api/v1/realtime/sdp
+   * Frontend'den gelen SDP'yi OpenAI'a proxy'ler
+   * Güvenlik: API key backend'de kalır, ephemeral key kullanılır
+   */
+  @Post('sdp')
+  @UseGuards(JwtAuthGuard)
+  async proxySdp(
+    @Body() body: { sdp: string; ephemeralKey: string },
+    @Res() res: Response,
+  ) {
+    try {
+      if (!body.sdp || !body.ephemeralKey) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          error: 'Missing sdp or ephemeralKey',
+        });
+      }
+
+      this.logger.debug('Proxying SDP to OpenAI Realtime API...');
+
+      const response = await fetch(
+        'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${body.ephemeralKey}`,
+            'Content-Type': 'application/sdp',
+          },
+          body: body.sdp,
+        },
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        this.logger.error(`OpenAI SDP error: ${response.status} - ${errText}`);
+        return res.status(response.status).json({
+          error: `OpenAI SDP error: ${response.status}`,
+          details: errText,
+        });
+      }
+
+      const answerSdp = await response.text();
+      this.logger.debug('SDP proxy successful');
+      
+      return res.json({ sdp: answerSdp });
+    } catch (error: any) {
+      this.logger.error('SDP proxy error:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        error: 'SDP proxy failed',
+        message: error.message,
+      });
+    }
   }
 }
