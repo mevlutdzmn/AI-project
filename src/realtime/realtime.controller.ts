@@ -93,9 +93,21 @@ export class RealtimeController {
     @Res() res: Response,
   ) {
     try {
-      if (!body.sdp || !body.ephemeralKey) {
+      this.logger.debug(`SDP body received: sdp length=${body?.sdp?.length || 0}, hasKey=${!!body?.ephemeralKey}`);
+      
+      if (!body?.sdp || !body?.ephemeralKey) {
+        this.logger.error('Missing sdp or ephemeralKey in request body');
         return res.status(HttpStatus.BAD_REQUEST).json({
           error: 'Missing sdp or ephemeralKey',
+          received: { hasSdp: !!body?.sdp, hasKey: !!body?.ephemeralKey },
+        });
+      }
+
+      // SDP'nin geçerli olduğunu kontrol et
+      if (!body.sdp.includes('v=0') || !body.sdp.includes('o=')) {
+        this.logger.error('Invalid SDP format');
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          error: 'Invalid SDP format',
         });
       }
 
@@ -123,7 +135,7 @@ export class RealtimeController {
       }
 
       const answerSdp = await response.text();
-      this.logger.debug('SDP proxy successful');
+      this.logger.debug(`SDP proxy successful, answer length=${answerSdp.length}`);
       
       return res.json({ sdp: answerSdp });
     } catch (error: any) {
