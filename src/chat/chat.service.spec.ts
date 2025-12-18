@@ -7,6 +7,7 @@ import { OpenAIAdapter } from '../ai/adapters/openai.adapter';
 import { DalleAdapter } from '../ai/adapters/dalle.adapter';
 import { SearchAdapter } from '../ai/adapters/search.adapter';
 import { DeepResearchAdapter } from '../ai/adapters/deep-research.adapter';
+import { UsageService } from '../usage/usage.service';
 import { DRIZZLE } from '../database/drizzle.provider';
 
 /**
@@ -94,6 +95,7 @@ describe('ChatService', () => {
         { provide: DalleAdapter, useValue: { generate: jest.fn() } },
         { provide: SearchAdapter, useValue: { search: jest.fn() } },
         { provide: DeepResearchAdapter, useValue: { research: jest.fn() } },
+        { provide: UsageService, useValue: { logUsage: jest.fn() } },
       ],
     }).compile();
 

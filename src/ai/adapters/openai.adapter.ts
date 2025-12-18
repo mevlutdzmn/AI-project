@@ -70,7 +70,7 @@ export class OpenAIAdapter {
     messages: ChatMessage[],
     model: string = 'gpt-4o',
     mode?: string,
-  ): Promise<string> {
+  ): Promise<{ content: string; usage?: { promptTokens: number; completionTokens: number } }> {
     try {
       if (!this.client) {
         throw new Error(
@@ -114,7 +114,8 @@ export class OpenAIAdapter {
 
       if (model.startsWith('gpt-5')) {
         // For GPT-5, use Responses API
-        return await this.chatGPT5(messages, model, mode);
+        const content = await this.chatGPT5(messages, model, mode);
+        return { content };
       }
 
       const response = await (this.client as any).chat.completions.create({
@@ -127,7 +128,13 @@ export class OpenAIAdapter {
         frequency_penalty: 0.1,
       });
 
-      return response.choices[0].message.content || '';
+      const content = response.choices[0].message.content || '';
+      const usage = response.usage ? {
+        promptTokens: response.usage.prompt_tokens || 0,
+        completionTokens: response.usage.completion_tokens || 0,
+      } : undefined;
+
+      return { content, usage };
     } catch (error: any) {
       this.logger.error('OpenAI API Error:', error);
       throw new Error(`OpenAI API Error: ${error.message}`);

@@ -11,6 +11,7 @@ import { DeepResearchAdapter } from '../ai/adapters/deep-research.adapter';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { MemoryService } from '../memory/memory.service';
+import { UsageService } from '../usage/usage.service';
 
 // PDF parse için dynamic import kullanacağız
 
@@ -391,6 +392,7 @@ export class ChatService {
     private usersService: UsersService,
     private configService: ConfigService,
     private memoryService: MemoryService,
+    private usageService: UsageService,
   ) {}
 
   private isImageRequest(message: any): boolean {
@@ -1227,7 +1229,19 @@ export class ChatService {
         };
       });
 
-      const aiResponse = await this.openai.chat(chatMessages, model, 'web');
+      const { content: aiResponse, usage } = await this.openai.chat(chatMessages, model, 'web');
+      
+      // Log usage for cost tracking
+      if (usage) {
+        await this.usageService.logUsage(
+          userId,
+          model,
+          usage.promptTokens,
+          usage.completionTokens,
+          sessionId,
+        );
+      }
+
       const [assistantMsg2] = await this.db
         .insert(messages)
         .values({
@@ -1260,7 +1274,18 @@ export class ChatService {
       };
     });
 
-    const aiResponse = await this.openai.chat(chatMessages, model);
+    const { content: aiResponse, usage } = await this.openai.chat(chatMessages, model);
+
+    // Log usage for cost tracking
+    if (usage) {
+      await this.usageService.logUsage(
+        userId,
+        model,
+        usage.promptTokens,
+        usage.completionTokens,
+        sessionId,
+      );
+    }
 
     const [assistantMsg] = await this.db
       .insert(messages)
@@ -2083,7 +2108,7 @@ Rules:
 
 User message: "${userMessage.substring(0, 200)}"`;
 
-      const response = await this.openai.chat(
+      const { content: response } = await this.openai.chat(
         [{ role: 'user', content: prompt }],
         'gpt-4o-mini',
       );
@@ -2133,7 +2158,19 @@ User message: "${userMessage.substring(0, 200)}"`;
         role: msg.role as 'user' | 'assistant',
         content: msg.content as any,
       }));
-    const response = await this.openai.chat(chatMessages, model || 'gpt-4o');
+    const { content: response, usage } = await this.openai.chat(chatMessages, model || 'gpt-4o');
+    
+    // Log usage for cost tracking
+    if (usage) {
+      await this.usageService.logUsage(
+        userId,
+        model || 'gpt-4o',
+        usage.promptTokens,
+        usage.completionTokens,
+        sessionId,
+      );
+    }
+
     await this.db.insert(messages).values({
       sessionId,
       role: 'assistant',
@@ -2475,7 +2512,7 @@ Summary of the work done and final output
         return { cleaned: text, original: text, wasFixed: false };
       }
 
-      const response = await this.openai.chat(
+      const { content: response } = await this.openai.chat(
         [
           {
             role: 'system',
@@ -2522,7 +2559,7 @@ RULES:
         return { response: '' };
       }
 
-      const response = await this.openai.chat(
+      const { content: response } = await this.openai.chat(
         [
           {
             role: 'system',
