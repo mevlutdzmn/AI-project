@@ -90,13 +90,20 @@ export class RealtimeController {
   @UseGuards(JwtAuthGuard)
   async proxySdp(
     @Body() body: { sdp: string; ephemeralKey: string },
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     try {
+      // Debug: Raw body'yi kontrol et
+      this.logger.debug(`Raw body type: ${typeof req.body}, keys: ${Object.keys(req.body || {}).join(', ')}`);
       this.logger.debug(`SDP body received: sdp length=${body?.sdp?.length || 0}, hasKey=${!!body?.ephemeralKey}`);
       
-      if (!body?.sdp || !body?.ephemeralKey) {
-        this.logger.error('Missing sdp or ephemeralKey in request body');
+      // req.body'den de dene (fallback)
+      const sdp = body?.sdp || req.body?.sdp;
+      const ephemeralKey = body?.ephemeralKey || req.body?.ephemeralKey;
+      
+      if (!sdp || !ephemeralKey) {
+        this.logger.error(`Missing sdp or ephemeralKey. Body: ${JSON.stringify(body).substring(0, 200)}`);
         return res.status(HttpStatus.BAD_REQUEST).json({
           error: 'Missing sdp or ephemeralKey',
           received: { hasSdp: !!body?.sdp, hasKey: !!body?.ephemeralKey },
@@ -104,7 +111,7 @@ export class RealtimeController {
       }
 
       // SDP'nin geçerli olduğunu kontrol et
-      if (!body.sdp.includes('v=0') || !body.sdp.includes('o=')) {
+      if (!sdp.includes('v=0') || !sdp.includes('o=')) {
         this.logger.error('Invalid SDP format');
         return res.status(HttpStatus.BAD_REQUEST).json({
           error: 'Invalid SDP format',
@@ -113,15 +120,27 @@ export class RealtimeController {
 
       this.logger.debug('Proxying SDP to OpenAI Realtime API...');
 
+      // SDP'nin sonunda CRLF olduğundan emin ol (OpenAI bunu bekliyor)
+      let sdpToSend = sdp;
+      if (!sdpToSend.endsWith('\r\n')) {
+        if (sdpToSend.endsWith('\n')) {
+          sdpToSend = sdpToSend.slice(0, -1) + '\r\n';
+        } else {
+          sdpToSend += '\r\n';
+        }
+      }
+      
+      this.logger.debug(`SDP to send length: ${sdpToSend.length}, ends with CRLF: ${sdpToSend.endsWith('\r\n')}`);
+
       const response = await fetch(
         'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${body.ephemeralKey}`,
+            'Authorization': `Bearer ${ephemeralKey}`,
             'Content-Type': 'application/sdp',
           },
-          body: body.sdp,
+          body: sdpToSend,
         },
       );
 
