@@ -118,13 +118,65 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   const config = new DocumentBuilder()
-    .setTitle('AI Platform API')
-    .setDescription('Chat and tools API documentation')
+    .setTitle('GooAI Platform API')
+    .setDescription(`
+# GooAI - AI Chat Platform API
+
+## Overview
+Complete REST API for the GooAI chat platform with authentication, chat sessions, 
+AI model integration, payments, and user management.
+
+## Authentication
+All protected endpoints require a JWT token in the Authorization header:
+\`Authorization: Bearer <token>\`
+
+## Rate Limits
+- **General endpoints**: 100 requests/minute
+- **AI chat endpoints**: 30 requests/minute  
+- **File uploads**: 10 requests/minute
+
+## Response Format
+All responses follow this structure:
+\`\`\`json
+{
+  "success": true,
+  "data": { ... },
+  "message": "Operation successful"
+}
+\`\`\`
+
+## Error Handling
+Errors return appropriate HTTP status codes with details:
+\`\`\`json
+{
+  "statusCode": 400,
+  "message": "Validation failed",
+  "error": "Bad Request"
+}
+\`\`\`
+    `)
     .setVersion('1.0.0')
+    .setContact('GooAI Support', 'https://goopay.ai', 'support@goopay.ai')
+    .setLicense('MIT', 'https://opensource.org/licenses/MIT')
+    .addServer('http://localhost:4000', 'Local Development')
+    .addServer('https://api.goopay.ai', 'Production')
     .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      { 
+        type: 'http', 
+        scheme: 'bearer', 
+        bearerFormat: 'JWT',
+        description: 'Enter your JWT token obtained from /auth/login'
+      },
       'bearerAuth',
     )
+    .addTag('Authentication', 'User registration, login, and token management')
+    .addTag('Chat', 'AI chat sessions and messaging')
+    .addTag('Users', 'User profile and settings')
+    .addTag('Folders', 'Chat session organization')
+    .addTag('Payments', 'Subscription and payment management')
+    .addTag('Files', 'File upload and management')
+    .addTag('Memory', 'User memories and custom instructions')
+    .addTag('Admin', 'Administrative operations')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document, { jsonDocumentUrl: 'docs/json' });

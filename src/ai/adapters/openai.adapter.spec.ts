@@ -65,12 +65,12 @@ describe('OpenAIAdapter', () => {
       // Mock the chat method since we can't call real API in tests
       jest
         .spyOn(adapter, 'chat')
-        .mockResolvedValue('Hello! How can I help you?');
+        .mockResolvedValue({ content: 'Hello! How can I help you?' });
 
       const result = await adapter.chat(messages, 'gpt-4o');
 
       expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
+      expect(result.content).toBe('Hello! How can I help you?');
     });
 
     it('should handle messages with images', async () => {
@@ -87,24 +87,25 @@ describe('OpenAIAdapter', () => {
         },
       ];
 
-      jest.spyOn(adapter, 'chat').mockResolvedValue('I can see an image...');
+      jest.spyOn(adapter, 'chat').mockResolvedValue({ content: 'I can see an image...' });
 
       const result = await adapter.chat(messages, 'gpt-4o');
 
       expect(result).toBeDefined();
+      expect(result.content).toContain('image');
     });
 
     it('should use different models', async () => {
       jest
         .spyOn(adapter, 'chat')
-        .mockResolvedValue('Response from gpt-4o-mini');
+        .mockResolvedValue({ content: 'Response from gpt-4o-mini' });
 
       const result = await adapter.chat(
         [{ role: 'user', content: 'Hi' }],
         'gpt-4o-mini',
       );
 
-      expect(result).toBe('Response from gpt-4o-mini');
+      expect(result.content).toBe('Response from gpt-4o-mini');
     });
 
     it('should throw error when client is not initialized', async () => {
@@ -277,36 +278,36 @@ describe('OpenAIAdapter', () => {
 
   describe('Model selection', () => {
     it('should work with gpt-4o model', async () => {
-      jest.spyOn(adapter, 'chat').mockResolvedValue('GPT-4o response');
+      jest.spyOn(adapter, 'chat').mockResolvedValue({ content: 'GPT-4o response' });
 
       const result = await adapter.chat(
         [{ role: 'user', content: 'Hi' }],
         'gpt-4o',
       );
 
-      expect(result).toBe('GPT-4o response');
+      expect(result.content).toBe('GPT-4o response');
     });
 
     it('should work with gpt-4o-mini model', async () => {
-      jest.spyOn(adapter, 'chat').mockResolvedValue('GPT-4o-mini response');
+      jest.spyOn(adapter, 'chat').mockResolvedValue({ content: 'GPT-4o-mini response' });
 
       const result = await adapter.chat(
         [{ role: 'user', content: 'Hi' }],
         'gpt-4o-mini',
       );
 
-      expect(result).toBe('GPT-4o-mini response');
+      expect(result.content).toBe('GPT-4o-mini response');
     });
 
     it('should work with o1 model', async () => {
-      jest.spyOn(adapter, 'chat').mockResolvedValue('O1 response');
+      jest.spyOn(adapter, 'chat').mockResolvedValue({ content: 'O1 response' });
 
       const result = await adapter.chat(
         [{ role: 'user', content: 'Solve x^2 = 4' }],
         'o1',
       );
 
-      expect(result).toBe('O1 response');
+      expect(result.content).toBe('O1 response');
     });
   });
 
