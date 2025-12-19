@@ -14,6 +14,21 @@ const TURKISH_IMAGE_KEYWORDS = [
   'resim yap',
   'resmi yap',
   'resimi yap',
+  // Yaygın yazım hataları
+  'resim ypa',  // typo: ypa -> yap
+  'resmi ypa',
+  'resimi ypa',
+  'resim yao',  // typo: yao -> yap
+  'resmi yao',
+  'resim uap',  // typo: uap -> yap
+  'resmi uap',
+  'resim çzi',  // typo: çzi -> çiz
+  'resmi çzi',
+  'resim yapı',  // typo
+  'resmi yapı',
+  'resim yaop',  // typo
+  'resmi yaop',
+  // Normal keywords devam
   'resim yapar mısın',
   'resmi yapar mısın',
   'resimi yapar mısın',
