@@ -4,11 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { MemoryService } from '../memory/memory.service';
 import { OpenAIAdapter } from '../ai/adapters/openai.adapter';
-import { DalleAdapter } from '../ai/adapters/dalle.adapter';
-import { SearchAdapter } from '../ai/adapters/search.adapter';
-import { DeepResearchAdapter } from '../ai/adapters/deep-research.adapter';
 import { UsageService } from '../usage/usage.service';
 import { DRIZZLE } from '../database/drizzle.provider';
+import { ChatImageService } from './services/chat-image.service';
+import { ChatPdfService } from './services/chat-pdf.service';
+import { ChatResearchService } from './services/chat-research.service';
+import { ChatTitleService } from './services/chat-title.service';
+import { ChatVoiceService } from './services/chat-voice.service';
 
 /**
  * ChatService Unit Tests
@@ -92,10 +94,43 @@ describe('ChatService', () => {
           },
         },
         { provide: OpenAIAdapter, useValue: { chat: jest.fn() } },
-        { provide: DalleAdapter, useValue: { generate: jest.fn() } },
-        { provide: SearchAdapter, useValue: { search: jest.fn() } },
-        { provide: DeepResearchAdapter, useValue: { research: jest.fn() } },
         { provide: UsageService, useValue: { logUsage: jest.fn() } },
+        {
+          provide: ChatImageService,
+          useValue: {
+            isImageGenerationRequest: jest.fn().mockReturnValue(false),
+            isImageEditRequest: jest.fn().mockReturnValue(false),
+            generateImage: jest.fn(),
+            editImage: jest.fn(),
+          },
+        },
+        {
+          provide: ChatPdfService,
+          useValue: {
+            extractPdfContent: jest.fn(),
+          },
+        },
+        {
+          provide: ChatResearchService,
+          useValue: {
+            isDeepResearchRequest: jest.fn().mockReturnValue(false),
+            isWebSearchRequest: jest.fn().mockReturnValue(false),
+            performDeepResearch: jest.fn(),
+            performWebSearch: jest.fn(),
+          },
+        },
+        {
+          provide: ChatTitleService,
+          useValue: {
+            generateTitle: jest.fn().mockResolvedValue('Test Title'),
+          },
+        },
+        {
+          provide: ChatVoiceService,
+          useValue: {
+            handleVoiceMessage: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
