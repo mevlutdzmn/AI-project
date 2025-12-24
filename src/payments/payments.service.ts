@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Inject } from '@nestjs/common';
 import { DRIZZLE } from '../database/drizzle.provider';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import * as schema from '../database/schema';
 import Stripe from 'stripe';
 import { eq } from 'drizzle-orm';
 import { users, payments } from '../database/schema';
@@ -13,20 +15,20 @@ export class PaymentsService {
 
   constructor(
     private configService: ConfigService,
-    @Inject(DRIZZLE) private db: any,
+    @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
   ) {
     const apiKey = this.configService.get<string>('STRIPE_SECRET_KEY');
 
     if (apiKey) {
       this.stripe = new Stripe(apiKey, {
-        apiVersion: '2024-11-20.acacia' as any,
+        apiVersion: '2024-11-20.acacia' as Stripe.LatestApiVersion,
       });
     } else {
       this.logger.warn(
         '⚠️ STRIPE_SECRET_KEY is missing. Payment features will be disabled.',
       );
       this.stripe = new Stripe('dummy_key', {
-        apiVersion: '2024-11-20.acacia' as any,
+        apiVersion: '2024-11-20.acacia' as Stripe.LatestApiVersion,
       });
     }
   }
