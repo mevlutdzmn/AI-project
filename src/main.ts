@@ -79,14 +79,18 @@ async function bootstrap() {
 
   app.use(json({ limit: '10mb' })); // ✅ Security: 50MB'dan 10MB'a düşürüldü
 
-  // ✅ Security: Helmet with basic CSP
+  // ✅ Security: Helmet with CSP (stricter in production)
+  const isProduction = process.env.NODE_ENV === 'production';
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Dev için gevşek
-          styleSrc: ["'self'", "'unsafe-inline'"],
+          // ✅ Production'da unsafe-inline kaldırıldı, dev'de gevşek
+          scriptSrc: isProduction 
+            ? ["'self'"] 
+            : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind için gerekli
           imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
           connectSrc: ["'self'", 'https:', 'wss:'],
           fontSrc: ["'self'", 'data:', 'https:'],
@@ -95,6 +99,12 @@ async function bootstrap() {
           frameSrc: ["'none'"],
         },
       },
+      // ✅ HSTS header for HTTPS enforcement
+      strictTransportSecurity: isProduction ? {
+        maxAge: 31536000, // 1 year
+        includeSubDomains: true,
+        preload: true,
+      } : false,
       crossOriginEmbedderPolicy: false, // OpenAI API ile uyumluluk
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
