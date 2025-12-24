@@ -21,12 +21,14 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { PaymentsService } from './payments.service';
 import { ZarinpalAdapter } from './zarinpal.adapter';
 import { EmailService } from '../notifications/email.service';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/drizzle.provider';
 import { users, pending_users } from '../database/schema';
+import * as schema from '../database/schema';
 
 @ApiTags('Payments')
 @Controller('payments')
@@ -38,7 +40,7 @@ export class PaymentsController {
     private zarinpalService: ZarinpalAdapter,
     private mailService: EmailService,
     private configService: ConfigService,
-    @Inject(DRIZZLE) private db: any,
+    @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
   ) {}
 
   @Post('create-intent')
@@ -71,11 +73,12 @@ export class PaymentsController {
         req.rawBody || req.body,
       );
       return res.send({ received: true });
-    } catch (err: any) {
-      this.logger.error(`Webhook Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error(`Webhook Error: ${errorMessage}`);
       return res
         .status(HttpStatus.BAD_REQUEST)
-        .send(`Webhook Error: ${err.message}`);
+        .send(`Webhook Error: ${errorMessage}`);
     }
   }
 
@@ -184,7 +187,7 @@ export class PaymentsController {
       return res.redirect(
         `${FRONTEND_URL}/payment/success?authority=${authority}&refId=${verification.refId}`,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Payment callback error:', error);
       return res.redirect(`${FRONTEND_URL}/payment/failed?reason=server_error`);
     }
@@ -311,11 +314,12 @@ export class PaymentsController {
         expiresAt: subscriptionExpiresAt,
         userId: newUser.id,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('❌ Activation error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return res
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
-        .send({ error: error.message });
+        .send({ error: errorMessage });
     }
   }
 

@@ -62,11 +62,11 @@ export class RealtimeController {
 
       this.logger.debug('Ephemeral token created successfully');
       return res.json(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('[realtime] Token error:', error);
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         error: 'Failed to create realtime token',
-        message: String(error),
+        message: error instanceof Error ? error.message : String(error),
       });
     }
   }
@@ -157,11 +157,12 @@ export class RealtimeController {
       this.logger.debug(`SDP proxy successful, answer length=${answerSdp.length}`);
       
       return res.json({ sdp: answerSdp });
-    } catch (error: any) {
-      this.logger.error('SDP proxy error:', error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error('SDP proxy error:', errorMessage);
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         error: 'SDP proxy failed',
-        message: error.message,
+        message: errorMessage,
       });
     }
   }

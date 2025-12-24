@@ -80,8 +80,9 @@ export class PaymentsService {
         signature,
         this.configService.get<string>('STRIPE_WEBHOOK_SECRET') || '',
       );
-    } catch (err: any) {
-      throw new Error(`Webhook Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      throw new Error(`Webhook Error: ${errorMessage}`);
     }
 
     if (event.type === 'payment_intent.succeeded') {
