@@ -118,10 +118,11 @@ export class HealthController {
         message: 'Database connection is healthy',
         duration: Date.now() - startTime,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return {
         status: 'fail',
-        message: `Database connection failed: ${error.message}`,
+        message: `Database connection failed: ${errorMessage}`,
         duration: Date.now() - startTime,
       };
     }

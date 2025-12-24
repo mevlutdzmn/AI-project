@@ -202,38 +202,40 @@ export class ChatController {
       );
       res.write('data: [DONE]\n\n');
       res.end();
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Streaming failed', error);
+      const err = error as { code?: string; message?: string };
       if (
-        error?.code === 'PREMIUM_REQUIRED' ||
-        error?.code === 'PREMIUM_EXPIRED'
+        err?.code === 'PREMIUM_REQUIRED' ||
+        err?.code === 'PREMIUM_EXPIRED'
       ) {
         res.write(
           `event: error\ndata: ${JSON.stringify({
-            error: error.message,
-            code: error.code,
+            error: err.message,
+            code: err.code,
             upgradeUrl: '/premium',
           })}\n\n`,
         );
         res.end();
         return;
       }
-      if (error?.code === 'RATE_LIMIT_EXCEEDED') {
+      if (err?.code === 'RATE_LIMIT_EXCEEDED') {
         res.write(
-          `event: error\ndata: ${JSON.stringify({ error: error.message, code: error.code })}\n\n`,
+          `event: error\ndata: ${JSON.stringify({ error: err.message, code: err.code })}\n\n`,
         );
         res.end();
         return;
       }
-      if (error?.message?.includes('Session not found')) {
+      if (err?.message?.includes('Session not found')) {
         res.write(
           `event: error\ndata: ${JSON.stringify({ error: 'Session not found or unauthorized' })}\n\n`,
         );
         res.end();
         return;
       }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       res.write(
-        `event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`,
+        `event: error\ndata: ${JSON.stringify({ error: errorMessage })}\n\n`,
       );
       res.end();
     }
