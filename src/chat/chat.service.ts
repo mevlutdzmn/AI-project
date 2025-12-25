@@ -242,6 +242,63 @@ export class ChatService {
     };
   }
 
+  /**
+   * Get messages around a specific message ID (for search jump-to)
+   * Returns messages before and after the target message
+   */
+  async getMessagesAroundId(
+    sessionId: string,
+    userId: number,
+    targetMessageId: number,
+    before: number = 25,
+    after: number = 25,
+  ): Promise<{ messages: any[]; targetIndex: number; hasMoreBefore: boolean; hasMoreAfter: boolean }> {
+    await this.ensureSessionOwnership(sessionId, userId);
+
+    // Get messages before target (including target)
+    const messagesBefore = await this.db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.sessionId, sessionId),
+          sql`${messages.id} <= ${targetMessageId}`
+        )
+      )
+      .orderBy(desc(messages.id))
+      .limit(before + 1);
+
+    // Get messages after target
+    const messagesAfter = await this.db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.sessionId, sessionId),
+          sql`${messages.id} > ${targetMessageId}`
+        )
+      )
+      .orderBy(messages.id)
+      .limit(after + 1);
+
+    const hasMoreBefore = messagesBefore.length > before;
+    const hasMoreAfter = messagesAfter.length > after;
+
+    // Combine and sort
+    const beforeMsgs = hasMoreBefore ? messagesBefore.slice(0, before) : messagesBefore;
+    const afterMsgs = hasMoreAfter ? messagesAfter.slice(0, after) : messagesAfter;
+
+    const allMessages = [...beforeMsgs.reverse(), ...afterMsgs];
+    const targetIndex = allMessages.findIndex(m => m.id === targetMessageId);
+
+    return {
+      messages: allMessages,
+      targetIndex,
+      hasMoreBefore,
+      hasMoreAfter,
+    };
+  }
+
   async getRecentMessages(sessionId: string, limit: number = 20) {
     const history = await this.db
       .select()

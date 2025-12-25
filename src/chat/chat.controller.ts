@@ -142,6 +142,34 @@ export class ChatController {
     );
   }
 
+  @Get('sessions/:sessionId/messages/around/:messageId')
+  @SkipThrottle()
+  @ApiOperation({
+    summary: 'Get messages around a specific message (for search jump-to)',
+  })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiParam({ name: 'messageId', description: 'Target message ID to center around' })
+  @ApiQuery({ name: 'before', required: false, description: 'Messages before target (default: 25)' })
+  @ApiQuery({ name: 'after', required: false, description: 'Messages after target (default: 25)' })
+  @ApiResponse({ status: 200, description: 'Returns messages around target' })
+  async getMessagesAroundId(
+    @Req() req,
+    @Param('sessionId') sessionId: string,
+    @Param('messageId') messageId: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    const parsedBefore = before ? parseInt(before, 10) : 25;
+    const parsedAfter = after ? parseInt(after, 10) : 25;
+    return this.chatService.getMessagesAroundId(
+      sessionId,
+      req.user.id,
+      parseInt(messageId, 10),
+      parsedBefore,
+      parsedAfter,
+    );
+  }
+
   @Post('messages')
   @ApiOperation({ summary: 'Send message to AI (non-streaming)' })
   @ApiResponse({ status: 201, description: 'Message sent successfully' })
