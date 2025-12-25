@@ -3,10 +3,14 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
+  Param,
   Request,
   UseGuards,
   Req,
   Res,
+  Headers,
+  Ip,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -42,8 +46,58 @@ export class AuthController {
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
   @ApiResponse({ status: 200, description: 'Login successful' })
-  async login(@Body() body: LoginDto) {
-    return this.authService.login(body.email, body.password);
+  async login(
+    @Body() body: LoginDto,
+    @Headers('user-agent') userAgent: string,
+    @Ip() ip: string,
+  ) {
+    return this.authService.login(body.email, body.password, userAgent, ip);
+  }
+
+  @Post('refresh')
+  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiResponse({ status: 200, description: 'Token refreshed' })
+  async refreshToken(
+    @Body('refreshToken') refreshToken: string,
+    @Headers('user-agent') userAgent: string,
+    @Ip() ip: string,
+  ) {
+    return this.authService.refreshAccessToken(refreshToken, userAgent, ip);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth('bearerAuth')
+  @Post('logout')
+  @ApiOperation({ summary: 'Logout user' })
+  @ApiResponse({ status: 200, description: 'Logged out' })
+  async logout(
+    @Request() req,
+    @Body('refreshToken') refreshToken?: string,
+  ) {
+    await this.authService.logout(req.user.id, refreshToken);
+    return { success: true };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth('bearerAuth')
+  @Get('sessions')
+  @ApiOperation({ summary: 'Get active sessions' })
+  @ApiResponse({ status: 200, description: 'Active sessions list' })
+  async getActiveSessions(@Request() req) {
+    return this.authService.getActiveSessions(req.user.id);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth('bearerAuth')
+  @Delete('sessions/:sessionId')
+  @ApiOperation({ summary: 'Revoke a specific session' })
+  @ApiResponse({ status: 200, description: 'Session revoked' })
+  async revokeSession(
+    @Request() req,
+    @Param('sessionId') sessionId: string,
+  ) {
+    await this.authService.revokeSession(req.user.id, parseInt(sessionId, 10));
+    return { success: true };
   }
 
   @Post('forgot-password')

@@ -82,26 +82,18 @@ const TURKISH_IMAGE_KEYWORDS = [
   'görsel çizebilir misin',
   'resim yapar mısın',
   'görsel yapar mısın',
-  // Tekil kelimeler
-  'görsel',
-  'çiz',
-  'illüstrasyon',
-  'grafik',
-  'manzara',
-  'portre',
-  'karikatür',
-  'anime',
-  'logo',
-  'ikon',
-  'afiş',
-  'poster',
-  'kapak',
-  'avatar',
-  'karakter',
-  'sahne',
-  'tasarım',
-  'eskiz',
-  'taslak',
+  // Daha spesifik intent ifadeleri (tekil kelimeler çıkarıldı - false positive önleme)
+  'bir logo tasarla',
+  'bana logo yap',
+  'logo çiz',
+  'ikon tasarla',
+  'poster yap',
+  'afiş tasarla',
+  'karikatür çiz',
+  'anime karakteri çiz',
+  'karakter tasarla',
+  'manzara çiz',
+  'portre çiz',
 ];
 
 // ==================== FARSÇA (فارسی) ====================
@@ -151,27 +143,12 @@ const PERSIAN_IMAGE_KEYWORDS = [
   'میشه عکس',
   'می‌شه تصویر',
   'می‌شه عکس',
-  // Tekil kelimeler
-  'تصویر',
-  'عکس',
-  'بساز',
-  'بکش',
-  'نقاشی',
-  'طراحی',
-  'ایجاد',
-  'گرافیک',
-  'پوستر',
-  'لوگو',
-  'آیکون',
-  'کاراکتر',
-  'صحنه',
-  'منظره',
-  'چهره',
-  'پرتره',
-  'انیمه',
-  'کارتون',
-  'اسکیس',
-  'طرح',
+  // Daha spesifik intent ifadeleri (tekil kelimeler çıkarıldı - false positive önleme)
+  'لوگو طراحی کن',
+  'لوگو بساز',
+  'پوستر بساز',
+  'پرتره بکش',
+  'کاراکتر طراحی کن',
 ];
 
 // ==================== İNGİLİZCE (English) ====================
@@ -236,42 +213,15 @@ const ENGLISH_IMAGE_KEYWORDS = [
   'please create',
   'please generate',
   'please draw',
-  // Single keywords
-  'image',
-  'picture',
-  'photo',
-  'photograph',
-  'draw',
-  'paint',
-  'sketch',
-  'illustration',
-  'artwork',
-  'design',
-  'graphic',
-  'poster',
-  'logo',
-  'icon',
-  'avatar',
-  'character',
-  'scene',
-  'landscape',
-  'portrait',
-  'anime',
-  'cartoon',
-  'render',
-  'visualize',
-  'depict',
-  'illustrate',
-  'concept art',
-  'digital art',
-  'fan art',
-  'wallpaper',
-  'banner',
-  'thumbnail',
-  'cover art',
-  'album art',
-  'book cover',
-  'movie poster',
+  // Daha spesifik intent ifadeleri (tekil kelimeler çıkarıldı - false positive önleme)
+  'design a logo',
+  'create a logo',
+  'draw a portrait',
+  'make a poster',
+  'design an icon',
+  'create artwork',
+  'digital art of',
+  'concept art of',
 ];
 
 /**
@@ -285,11 +235,167 @@ export const IMAGE_KEYWORDS: readonly string[] = [
 ] as const;
 
 /**
+ * Code indicators - if message contains these, it's likely code discussion not image request
+ * These help prevent false positives when users discuss code
+ */
+const CODE_INDICATORS = [
+  // Code block markers
+  '```',
+  '`',
+  // Programming keywords
+  'function',
+  'const ',
+  'let ',
+  'var ',
+  'class ',
+  'import ',
+  'export ',
+  'return ',
+  'if (',
+  'for (',
+  'while (',
+  'async ',
+  'await ',
+  'def ',
+  'print(',
+  'console.log',
+  // HTML/CSS indicators
+  '<div',
+  '<span',
+  '<style',
+  '<script',
+  '</div>',
+  '</span>',
+  'className=',
+  'class="',
+  'style="',
+  'onclick',
+  'href=',
+  'src=',
+  '@import',
+  '@media',
+  'border-radius',
+  'background:',
+  'padding:',
+  'margin:',
+  'display:',
+  'position:',
+  'flex',
+  'grid',
+  // File extensions
+  '.ts',
+  '.js',
+  '.tsx',
+  '.jsx',
+  '.py',
+  '.java',
+  '.cpp',
+  '.cs',
+  '.html',
+  '.css',
+  // Turkish code discussion
+  'kod yaz',
+  'kodu yaz',
+  'kodunu yaz',
+  'kodunu göster',
+  'kod örneği',
+  'nasıl yazılır',
+  'fonksiyon yaz',
+  'fonksiyonu yaz',
+  // Persian code discussion
+  'کد بنویس',
+  'کد رو بنویس',
+  // English code discussion
+  'write code',
+  'code for',
+  'write a function',
+  'write the code',
+  'show me the code',
+  'code example',
+  'how to code',
+  'implement',
+];
+
+/**
+ * Minimum message length that likely indicates code/technical content
+ * Messages longer than this threshold with code indicators should never trigger image generation
+ */
+const LONG_MESSAGE_THRESHOLD = 500;
+
+/**
+ * Check if a message contains code indicators
+ * @param message - The user message to check
+ * @returns true if the message likely contains code discussion
+ */
+function containsCodeIndicator(message: string): boolean {
+  const lowerMessage = message.toLowerCase();
+  return CODE_INDICATORS.some((indicator) => lowerMessage.includes(indicator.toLowerCase()));
+}
+
+/**
+ * Check if message looks like code/technical content
+ * Uses multiple heuristics to detect code
+ */
+function looksLikeCode(message: string): boolean {
+  // Check for code block markers
+  if (message.includes('```') || message.includes('`')) {
+    return true;
+  }
+  
+  // Check for HTML-like content (simple check, not regex for performance)
+  if (message.includes('<div') || message.includes('<span') || 
+      message.includes('<style') || message.includes('<script') ||
+      message.includes('</div>') || message.includes('</span>')) {
+    return true;
+  }
+  
+  // Check for CSS-like content (simple string check for performance)
+  if (message.includes('border-radius') || message.includes('background:') ||
+      message.includes('padding:') || message.includes('margin:') ||
+      message.includes('display:') || message.includes('position:')) {
+    return true;
+  }
+  
+  // Check for JavaScript/TypeScript patterns (simple string checks)
+  if (message.includes('function ') || message.includes('function(') ||
+      message.includes('const ') || message.includes('let ') ||
+      message.includes('=> {') || message.includes('=> (') ||
+      message.includes('import ') || message.includes('export ')) {
+    return true;
+  }
+  
+  // Long messages with code indicators are likely code
+  if (message.length > LONG_MESSAGE_THRESHOLD && containsCodeIndicator(message)) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * Check if a message contains image generation keywords
+ * Excludes messages that contain code indicators to prevent false positives
  * @param message - The user message to check
  * @returns true if the message likely requests image generation
  */
 export function containsImageKeyword(message: string): boolean {
+  // ✅ CRITICAL: Check if message looks like code FIRST
+  // Long messages with code are NEVER image requests
+  if (looksLikeCode(message)) {
+    return false;
+  }
+  
+  // Check for code indicators (simpler check)
+  if (containsCodeIndicator(message)) {
+    return false;
+  }
+  
+  // Very long messages (>1000 chars) are unlikely to be image requests
+  // Image requests are typically short like "resim yap", "görsel oluştur"
+  if (message.length > 1000) {
+    return false;
+  }
+  
   const lowerMessage = message.toLowerCase();
   return IMAGE_KEYWORDS.some((keyword) => lowerMessage.includes(keyword));
 }

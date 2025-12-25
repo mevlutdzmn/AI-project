@@ -11,3 +11,4 @@ export * from './shared_messages';
 export * from './user_settings';
 export * from './folders';
 export * from './usage_logs';
+export * from './audit_logs';

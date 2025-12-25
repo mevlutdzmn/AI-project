@@ -7,11 +7,12 @@ import { Inject } from '@nestjs/common';
 import { DRIZZLE } from '../database/drizzle.provider';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../database/schema';
-import { pending_users, users } from '../database/schema';
-import { eq } from 'drizzle-orm';
+import { pending_users, users, authSessions } from '../database/schema';
+import { eq, and, gt } from 'drizzle-orm';
 import * as crypto from 'crypto';
 
 const VERIFICATION_WINDOW_MINUTES = 15;
+const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 
 @Injectable()
 export class AuthService {
@@ -69,7 +70,7 @@ export class AuthService {
     };
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, deviceInfo?: string, ipAddress?: string) {
     const user = await this.userService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -95,12 +96,32 @@ export class AuthService {
       throw new UnauthorizedException('SUBSCRIPTION_EXPIRED');
     }
 
+    // ✅ Generate session fingerprint for hijacking prevention
+    const fingerprint = this.generateFingerprint(deviceInfo, ipAddress);
+
     const payload = {
       userId: user.id,
       email: user.email,
       isAdmin: user.isAdmin,
+      fingerprint, // ✅ Add fingerprint to JWT
     };
     const token = this.jwtService.sign(payload);
+
+    // ✅ Generate and store refresh token in database (hashed)
+    const refreshToken = crypto.randomBytes(64).toString('hex');
+    const hashedRefreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+    await this.db.insert(authSessions).values({
+      userId: user.id,
+      refreshToken: hashedRefreshToken,
+      deviceInfo: deviceInfo?.substring(0, 512) || 'unknown',
+      ipAddress: ipAddress?.substring(0, 45) || 'unknown',
+      fingerprint,
+      expiresAt,
+    });
+
+    this.logger.log(`User ${user.id} logged in from ${ipAddress || 'unknown'}`);
 
     return {
       user: {
@@ -114,7 +135,122 @@ export class AuthService {
         isAdmin: user.isAdmin,
       },
       token,
+      refreshToken, // ✅ Return plaintext refresh token to client
     };
+  }
+
+  /**
+   * Generate a fingerprint from device info and IP for session binding
+   */
+  private generateFingerprint(deviceInfo?: string, ipAddress?: string): string {
+    const data = `${deviceInfo || 'unknown'}:${ipAddress || 'unknown'}`;
+    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 16);
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshAccessToken(refreshToken: string, deviceInfo?: string, ipAddress?: string) {
+    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    
+    // Find valid session
+    const [session] = await this.db
+      .select()
+      .from(authSessions)
+      .where(
+        and(
+          eq(authSessions.refreshToken, hashedToken),
+          gt(authSessions.expiresAt, new Date())
+        )
+      );
+
+    if (!session) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Get user
+    const user = await this.userService.findById(session.userId);
+    if (!user || !user.active) {
+      // Delete invalid session
+      await this.db.delete(authSessions).where(eq(authSessions.id, session.id));
+      throw new UnauthorizedException('User not found or inactive');
+    }
+
+    // ✅ Verify fingerprint matches (optional strict mode)
+    const currentFingerprint = this.generateFingerprint(deviceInfo, ipAddress);
+    if (session.fingerprint && session.fingerprint !== currentFingerprint) {
+      this.logger.warn(`Fingerprint mismatch for user ${user.id}. Possible session hijacking attempt.`);
+      // In strict mode, you could reject here. For now, just log.
+    }
+
+    // Update last used timestamp
+    await this.db
+      .update(authSessions)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(authSessions.id, session.id));
+
+    // Generate new access token
+    const payload = {
+      userId: user.id,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      fingerprint: currentFingerprint,
+    };
+    const token = this.jwtService.sign(payload);
+
+    return { token };
+  }
+
+  /**
+   * Logout - revoke refresh token
+   */
+  async logout(userId: number, refreshToken?: string) {
+    if (refreshToken) {
+      const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+      await this.db.delete(authSessions).where(
+        and(
+          eq(authSessions.userId, userId),
+          eq(authSessions.refreshToken, hashedToken)
+        )
+      );
+    } else {
+      // Logout from all devices
+      await this.db.delete(authSessions).where(eq(authSessions.userId, userId));
+    }
+    this.logger.log(`User ${userId} logged out`);
+  }
+
+  /**
+   * Get active sessions for a user
+   */
+  async getActiveSessions(userId: number) {
+    return this.db
+      .select({
+        id: authSessions.id,
+        deviceInfo: authSessions.deviceInfo,
+        ipAddress: authSessions.ipAddress,
+        lastUsedAt: authSessions.lastUsedAt,
+        createdAt: authSessions.createdAt,
+      })
+      .from(authSessions)
+      .where(
+        and(
+          eq(authSessions.userId, userId),
+          gt(authSessions.expiresAt, new Date())
+        )
+      );
+  }
+
+  /**
+   * Revoke a specific session
+   */
+  async revokeSession(userId: number, sessionId: number) {
+    await this.db.delete(authSessions).where(
+      and(
+        eq(authSessions.userId, userId),
+        eq(authSessions.id, sessionId)
+      )
+    );
   }
 
   async verifyEmail(email: string, code: string) {
