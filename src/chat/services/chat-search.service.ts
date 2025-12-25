@@ -78,6 +78,7 @@ export class ChatSearchService {
   ): Promise<SearchResultItem[]> {
     try {
       const tsQuery = this.buildTsQuery(searchTerm);
+      const likePattern = `%${searchTerm}%`;
 
       const results = await this.db.execute(sql`
         SELECT 
@@ -87,16 +88,19 @@ export class ChatSearchService {
           s.archived,
           s.created_at,
           s.updated_at,
-          ts_rank(s.search_vector, to_tsquery('english', ${tsQuery})) as rank,
-          ts_headline('english', s.title, to_tsquery('english', ${tsQuery}),
-            'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20, MaxFragments=1'
-          ) as highlighted
+          CASE 
+            WHEN s.title ILIKE ${likePattern} THEN 1.0
+            ELSE ts_rank(s.search_vector, to_tsquery('simple', ${tsQuery}))
+          END as rank
         FROM sessions s
         WHERE s.user_id = ${userId}
           AND s.is_deleted = false
           ${query.includeArchived ? sql`` : sql`AND s.archived = false`}
           ${query.pinnedOnly ? sql`AND s.pinned = true` : sql``}
-          AND s.search_vector @@ to_tsquery('english', ${tsQuery})
+          AND (
+            s.title ILIKE ${likePattern}
+            OR s.search_vector @@ to_tsquery('simple', ${tsQuery})
+          )
         ORDER BY 
           s.pinned DESC,
           rank DESC,
@@ -113,7 +117,7 @@ export class ChatSearchService {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         snippet: row.title,
-        highlightedSnippet: row.highlighted || row.title,
+        highlightedSnippet: this.highlightText(row.title, searchTerm),
         score: this.calculateScore(row.rank, row.created_at, row.pinned),
         matchType: 'title' as const,
       }));
@@ -133,6 +137,7 @@ export class ChatSearchService {
   ): Promise<SearchResultItem[]> {
     try {
       const tsQuery = this.buildTsQuery(searchTerm);
+      const likePattern = `%${searchTerm}%`;
 
       const results = await this.db.execute(sql`
         SELECT 
@@ -146,17 +151,10 @@ export class ChatSearchService {
           s.archived,
           s.created_at,
           s.updated_at,
-          ts_rank(m.search_vector, to_tsquery('english', ${tsQuery})) as rank,
-          ts_headline('english', 
-            CASE 
-              WHEN m.content NOT LIKE '[%' AND m.content NOT LIKE '{%' THEN 
-                TRIM(BOTH '"' FROM m.content)
-              ELSE 
-                LEFT(TRIM(BOTH '"' FROM m.content), 500)
-            END,
-            to_tsquery('english', ${tsQuery}),
-            'StartSel=<mark>, StopSel=</mark>, MaxWords=35, MinWords=15, MaxFragments=1'
-          ) as highlighted
+          CASE 
+            WHEN m.content ILIKE ${likePattern} THEN 1.0
+            ELSE ts_rank(m.search_vector, to_tsquery('simple', ${tsQuery}))
+          END as rank
         FROM messages m
         INNER JOIN sessions s ON m.session_id = s.id
         WHERE s.user_id = ${userId}
@@ -164,7 +162,10 @@ export class ChatSearchService {
           ${query.includeArchived ? sql`` : sql`AND s.archived = false`}
           ${query.pinnedOnly ? sql`AND s.pinned = true` : sql``}
           AND m.role IN ('user', 'assistant')
-          AND m.search_vector @@ to_tsquery('english', ${tsQuery})
+          AND (
+            m.content ILIKE ${likePattern}
+            OR m.search_vector @@ to_tsquery('simple', ${tsQuery})
+          )
           AND m.content NOT LIKE '%data:image%'
         ORDER BY 
           s.pinned DESC,
@@ -184,7 +185,7 @@ export class ChatSearchService {
         messageId: row.message_id,
         messageRole: row.role,
         snippet: this.extractSnippet(row.content),
-        highlightedSnippet: row.highlighted || this.extractSnippet(row.content),
+        highlightedSnippet: this.highlightText(this.extractSnippet(row.content), searchTerm),
         score: this.calculateScore(row.rank, row.message_created_at, row.pinned),
         matchType: 'content' as const,
       }));
@@ -269,6 +270,21 @@ export class ChatSearchService {
     }
 
     return text;
+  }
+
+  /**
+   * Highlight search term in text (language-agnostic)
+   * Works with Turkish, Persian, English etc.
+   */
+  private highlightText(text: string, searchTerm: string): string {
+    if (!text || !searchTerm) return text;
+    
+    // Escape regex special characters in search term
+    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Case-insensitive replace with <mark> tags
+    const regex = new RegExp(`(${escapedTerm})`, 'gi');
+    return text.replace(regex, '<mark>$1</mark>');
   }
 
   /**
