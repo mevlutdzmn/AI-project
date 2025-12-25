@@ -27,6 +27,11 @@ async function bootstrap() {
     rawBody: true, // Enable raw body for realtime API SDP handling
   });
 
+  // ✅ FIX: Increase header size limit to prevent HTTP 431 errors
+  const server = app.getHttpServer();
+  server.maxHeadersCount = 100;
+  server.headersTimeout = 60000;
+
   // Security: restrict CORS to known frontend origins and enable credentials
   const allowedOrigins = [
     'http://localhost:3000',
