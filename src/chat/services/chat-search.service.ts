@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { DRIZZLE } from '../../database/drizzle.provider';
+import * as schema from '../../database/schema';
 import {
   SearchQueryDto,
   SearchResultItem,
@@ -20,7 +22,9 @@ import {
 export class ChatSearchService {
   private readonly logger = new Logger(ChatSearchService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
+  ) {}
 
   /**
    * Search conversations and messages
@@ -75,7 +79,7 @@ export class ChatSearchService {
     try {
       const tsQuery = this.buildTsQuery(searchTerm);
 
-      const results = await this.db.db.execute(sql`
+      const results = await this.db.execute(sql`
         SELECT 
           s.id,
           s.title,
@@ -100,7 +104,7 @@ export class ChatSearchService {
         LIMIT ${query.limit}
       `);
 
-      return (results.rows as any[]).map((row) => ({
+      return (results as any[]).map((row) => ({
         type: 'session' as const,
         sessionId: row.id,
         sessionTitle: row.title,
@@ -130,7 +134,7 @@ export class ChatSearchService {
     try {
       const tsQuery = this.buildTsQuery(searchTerm);
 
-      const results = await this.db.db.execute(sql`
+      const results = await this.db.execute(sql`
         SELECT 
           m.id as message_id,
           m.role,
@@ -169,7 +173,7 @@ export class ChatSearchService {
         LIMIT ${query.limit}
       `);
 
-      return (results.rows as any[]).map((row) => ({
+      return (results as any[]).map((row) => ({
         type: 'message' as const,
         sessionId: row.session_id,
         sessionTitle: row.session_title,
