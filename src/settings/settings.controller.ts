@@ -3,8 +3,9 @@ import { Request } from 'express';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+// ✅ User object from JWT Strategy (returns full user, not just payload)
 interface JwtUser {
-  sub: number;
+  id: number;
   email: string;
   isAdmin: boolean;
 }
@@ -26,13 +27,13 @@ export class SettingsController {
 
   @Get()
   async getSettings(@Req() req: Request & { user: JwtUser }) {
-    const userId = req.user.sub;
+    const userId = req.user.id; // ✅ FIX: JWT Strategy returns full user object
     return this.settingsService.getSettings(userId);
   }
 
   @Put()
   async updateSettings(@Req() req: Request & { user: JwtUser }, @Body() updateData: UpdateSettingsDto) {
-    const userId = req.user.sub;
+    const userId = req.user.id; // ✅ FIX: JWT Strategy returns full user object
     return this.settingsService.updateSettings(userId, updateData);
   }
 }
