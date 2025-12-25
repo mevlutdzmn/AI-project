@@ -80,9 +80,9 @@ Examples:
         return translated;
       }
       return prompt;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn(
-        `Translation failed, using original prompt: ${error.message}`,
+        `Translation failed, using original prompt: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       return prompt;
     }
@@ -117,9 +117,9 @@ Examples:
 
       this.logger.log(`✅ Image generated successfully`);
       return imageUrl;
-    } catch (error: any) {
-      this.logger.error('DALL-E Error:', error.message);
-      throw new Error(`Image Generation Error: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error('DALL-E Error:', error instanceof Error ? error.message : 'Unknown error');
+      throw new Error(`Image Generation Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

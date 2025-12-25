@@ -99,8 +99,8 @@ export class ChatResearchService {
         userMessageId: userMsg[0]?.id,
         assistantMessageId: assistantMsg[0]?.id,
       };
-    } catch (error: any) {
-      this.logger.error(`[DeepResearch] Save failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`[DeepResearch] Save failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return { success: false };
     }
   }

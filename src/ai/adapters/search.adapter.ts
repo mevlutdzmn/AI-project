@@ -73,11 +73,12 @@ export class SearchAdapter {
         query,
         results,
       };
-    } catch (error: any) {
-      this.logger.error('[Serper] Search error:', error?.message || error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Serper search failed';
+      this.logger.error('[Serper] Search error:', message);
       return {
         type: 'error',
-        message: error?.message || 'Serper search failed',
+        message,
       };
     }
   }
@@ -110,11 +111,12 @@ export class SearchAdapter {
         query,
         results,
       };
-    } catch (error: any) {
-      this.logger.error('[Bing] Search error:', error?.message || error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Bing search failed';
+      this.logger.error('[Bing] Search error:', message);
       return {
         type: 'error',
-        message: error?.message || 'Bing search failed',
+        message,
       };
     }
   }

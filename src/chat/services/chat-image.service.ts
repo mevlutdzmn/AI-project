@@ -262,8 +262,8 @@ export class ChatImageService {
 
       await this.saveAssistantMessage(sessionId, imageResponse, model);
       return imageResponse;
-    } catch (error: any) {
-      this.logger.error('Image generation failed:', error.message);
+    } catch (error: unknown) {
+      this.logger.error('Image generation failed:', error instanceof Error ? error.message : 'Unknown error');
       const errorMsg = this.getImageErrorMessage(error);
       await this.saveAssistantMessage(sessionId, errorMsg, model);
       return errorMsg;

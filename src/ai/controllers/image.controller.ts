@@ -66,8 +66,8 @@ export class ImageController {
         creditsUsed: imageCredits + 1,
         isPremium: user.isPremium && !premiumExpired,
       };
-    } catch (error: any) {
-      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    } catch (error: unknown) {
+      throw new HttpException(error instanceof Error ? error.message : 'Unknown error', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

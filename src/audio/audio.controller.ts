@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   HttpCode,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response, Request } from 'express';
@@ -24,6 +25,8 @@ const PREMIUM_MAX_DURATION = 60;
 @Controller('audio')
 @UseGuards(JwtAuthGuard)
 export class AudioController {
+  private readonly logger = new Logger(AudioController.name);
+
   constructor(private readonly audioService: AudioService) {}
 
   /**
@@ -87,8 +90,8 @@ export class AudioController {
         file.originalname || 'audio.webm',
       );
       return { text };
-    } catch (error: any) {
-      console.error('[Transcribe] Error:', error);
+    } catch (error: unknown) {
+      this.logger.error('[Transcribe] Error:', error);
       // Fallback message
       return { text: '', error: 'Anlaşılamadı, lütfen tekrar deneyin.' };
     }
@@ -137,9 +140,9 @@ export class AudioController {
       });
 
       res.send(audioBuffer);
-    } catch (error: any) {
-      console.error('[TTS] Error:', error);
-      throw new BadRequestException(`TTS failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error('[TTS] Error:', error);
+      throw new BadRequestException(`TTS failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

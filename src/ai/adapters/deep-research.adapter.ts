@@ -389,9 +389,9 @@ export class DeepResearchAdapter {
       const report = await this.research(session.query, onProgress);
       session.finalReport = report;
       session.status = 'completed';
-    } catch (error: any) {
+    } catch (error: unknown) {
       session.status = 'failed';
-      session.error = error.message;
+      session.error = error instanceof Error ? error.message : 'Unknown error';
     }
   }
 

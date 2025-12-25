@@ -101,13 +101,14 @@ export class ZarinpalAdapter {
         authority: data.authority,
         paymentUrl: `${this.ZARINPAL_PAYMENT_URL}/${data.authority}`,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { errors?: { message: string }[] } }; message?: string };
       this.logger.error(
         'Zarinpal initiate payment error:',
-        error.response?.data || error.message,
+        axiosError.response?.data || (error instanceof Error ? error.message : 'Unknown error'),
       );
       throw new Error(
-        `Payment initiation failed: ${error.response?.data?.errors?.[0]?.message || error.message}`,
+        `Payment initiation failed: ${axiosError.response?.data?.errors?.[0]?.message || (error instanceof Error ? error.message : 'Unknown error')}`,
       );
     }
   }
@@ -163,14 +164,15 @@ export class ZarinpalAdapter {
           message: `Verification failed with code: ${data?.code}`,
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { errors?: { message: string }[] } }; message?: string };
       this.logger.error(
         'Zarinpal verify payment error:',
-        error.response?.data || error.message,
+        axiosError.response?.data || (error instanceof Error ? error.message : 'Unknown error'),
       );
       return {
         success: false,
-        message: `Verification error: ${error.response?.data?.errors?.[0]?.message || error.message}`,
+        message: `Verification error: ${axiosError.response?.data?.errors?.[0]?.message || (error instanceof Error ? error.message : 'Unknown error')}`,
       };
     }
   }

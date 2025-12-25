@@ -49,8 +49,8 @@ export class AudioService {
         `[Whisper] Transcription complete: "${String(response).substring(0, 100)}..."`,
       );
       return String(response);
-    } catch (error: any) {
-      this.logger.error(`[Whisper] Transcription failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`[Whisper] Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
@@ -85,8 +85,8 @@ export class AudioService {
 
       this.logger.log(`[TTS] Audio generated: ${buffer.length} bytes`);
       return buffer;
-    } catch (error: any) {
-      this.logger.error(`[TTS] Speech generation failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`[TTS] Speech generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }

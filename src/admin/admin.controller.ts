@@ -78,8 +78,8 @@ export class AdminController {
   async createUser(@Body() body: any) {
     try {
       return await this.adminService.createUser(body);
-    } catch (error: any) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    } catch (error: unknown) {
+      throw new HttpException(error instanceof Error ? error.message : 'Unknown error', HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -111,8 +111,8 @@ export class AdminController {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
       return { message: 'User deleted successfully' };
-    } catch (error: any) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    } catch (error: unknown) {
+      throw new HttpException(error instanceof Error ? error.message : 'Unknown error', HttpStatus.BAD_REQUEST);
     }
   }
 

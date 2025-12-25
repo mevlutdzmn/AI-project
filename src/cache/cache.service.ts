@@ -48,7 +48,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
 
         await this.redisClient.connect();
         this.logger.log('✅ Redis cache connected');
-      } catch (error: any) {
+      } catch (error: unknown) {
         this.logger.warn('⚠️ Redis not available, using in-memory cache');
         this.redisClient = null;
       }

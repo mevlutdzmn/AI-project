@@ -135,9 +135,9 @@ export class OpenAIAdapter {
       } : undefined;
 
       return { content, usage };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('OpenAI API Error:', error);
-      throw new Error(`OpenAI API Error: ${error.message}`);
+      throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -225,9 +225,9 @@ export class OpenAIAdapter {
         );
         // Already sent to client, no need to resend
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('OpenAI Stream Error:', error);
-      throw new Error(`AI Provider Error: ${error.message}`);
+      throw new Error(`AI Provider Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
