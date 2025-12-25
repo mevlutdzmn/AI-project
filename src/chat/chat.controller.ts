@@ -23,12 +23,14 @@ import {
 } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
+import { ChatSearchService } from './services/chat-search.service';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { StreamMessageDto } from './dto/stream-message.dto';
+import { SearchQueryDto } from './dto/search-query.dto';
 
 @ApiTags('Chat')
 @ApiBearerAuth()
@@ -37,7 +39,10 @@ import { StreamMessageDto } from './dto/stream-message.dto';
 export class ChatController {
   private readonly logger = new Logger(ChatController.name);
 
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    private searchService: ChatSearchService,
+  ) {}
 
   @Post('sessions')
   @ApiOperation({ summary: 'Create new chat session' })
@@ -72,6 +77,28 @@ export class ChatController {
       sessionId: session.id,
       response,
     };
+  }
+
+  /**
+   * ChatGPT-like conversation search
+   * Searches both session titles and message content
+   */
+  @Get('search')
+  @SkipThrottle()
+  @ApiOperation({
+    summary: 'Search conversations and messages',
+    description: 'Full-text search across session titles and message content with ranking',
+  })
+  @ApiQuery({ name: 'query', required: true, description: 'Search query' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Max results (default: 20)' })
+  @ApiQuery({ name: 'includeArchived', required: false, description: 'Include archived chats' })
+  @ApiQuery({ name: 'pinnedOnly', required: false, description: 'Search only pinned chats' })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results with highlighted snippets',
+  })
+  async searchConversations(@Req() req, @Query() query: SearchQueryDto) {
+    return this.searchService.search(req.user.id, query);
   }
 
   @Get('sessions')

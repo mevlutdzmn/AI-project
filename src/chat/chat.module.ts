@@ -15,6 +15,7 @@ import {
   ChatTitleService,
   ChatVoiceService,
 } from './services';
+import { ChatSearchService } from './services/chat-search.service';
 
 @Module({
   imports: [AIModule, UsersModule, DatabaseModule, MemoryModule, UsageModule],
@@ -27,6 +28,7 @@ import {
     ChatResearchService,
     ChatTitleService,
     ChatVoiceService,
+    ChatSearchService,
   ],
   exports: [ChatService],
 })
