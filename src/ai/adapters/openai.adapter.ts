@@ -442,10 +442,11 @@ export class OpenAIAdapter {
     // tool_choice default "auto" - GPT kendisi karar verir
     // Kullanıcı "çiz" derse → GPT görsel oluşturur
     // Kullanıcı "merhaba" derse → GPT metin döner
+    // ✅ Default kalite HIGH - ChatGPT gibi yüksek kaliteli görseller
     requestParams.tools = [
       {
         type: 'image_generation',
-        quality: wantsHighQuality ? 'high' : 'auto',
+        quality: 'high', // Always high quality like ChatGPT
         background: wantsTransparent ? 'transparent' : 'auto',
       },
     ];
