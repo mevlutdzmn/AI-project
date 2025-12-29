@@ -373,6 +373,63 @@ function looksLikeCode(message: string): boolean {
 }
 
 /**
+ * Action verbs that indicate image generation when combined with a subject
+ * "uğur böceği çiz" -> "çiz" indicates drawing request
+ * "bir kedi yap" -> "yap" in context indicates creation request
+ */
+const TURKISH_IMAGE_ACTION_VERBS = [
+  'çiz',           // draw (en yaygın)
+  'çizer misin',   // can you draw
+  'çizebilir misin',
+  'çizsene',       // draw it
+  'çizin',         // draw (formal)
+  'çizelim',       // let's draw
+];
+
+const ENGLISH_IMAGE_ACTION_VERBS = [
+  'draw',
+  'sketch',
+  'paint',
+  'illustrate',
+];
+
+const PERSIAN_IMAGE_ACTION_VERBS = [
+  'بکش',           // draw
+  'نقاشی کن',      // paint/draw
+];
+
+/**
+ * Check if message ends with an image action verb
+ * Detects patterns like: "uğur böceği çiz", "cat draw", "گربه بکش"
+ */
+function endsWithImageActionVerb(message: string): boolean {
+  const lowerMessage = message.toLowerCase().trim();
+  
+  // Check Turkish verbs
+  for (const verb of TURKISH_IMAGE_ACTION_VERBS) {
+    if (lowerMessage.endsWith(verb)) {
+      return true;
+    }
+  }
+  
+  // Check English verbs
+  for (const verb of ENGLISH_IMAGE_ACTION_VERBS) {
+    if (lowerMessage.endsWith(verb)) {
+      return true;
+    }
+  }
+  
+  // Check Persian verbs
+  for (const verb of PERSIAN_IMAGE_ACTION_VERBS) {
+    if (lowerMessage.endsWith(verb)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Check if a message contains image generation keywords
  * Excludes messages that contain code indicators to prevent false positives
  * @param message - The user message to check
@@ -397,5 +454,12 @@ export function containsImageKeyword(message: string): boolean {
   }
   
   const lowerMessage = message.toLowerCase();
+  
+  // ✅ NEW: Check if message ends with image action verb
+  // This catches: "uğur böceği çiz", "cat draw", etc.
+  if (endsWithImageActionVerb(lowerMessage)) {
+    return true;
+  }
+  
   return IMAGE_KEYWORDS.some((keyword) => lowerMessage.includes(keyword));
 }

@@ -77,6 +77,43 @@ const TURKISH_EDIT_KEYWORDS = [
   'resimi yap',
   'görseli yap',
   'görseli değiştir',
+  // ✅ Location/position modifications
+  'üstünde olsun',
+  'üzerinde olsun',
+  'altında olsun',
+  'yanında olsun',
+  'arkasında olsun',
+  'önünde olsun',
+  'içinde olsun',
+  'elinde olsun',
+  'elinin üstünde',
+  'elinin üzerinde',
+  'elinde tut',
+  'masada olsun',
+  'yerde olsun',
+  'havada olsun',
+  'suda olsun',
+  'ormanda olsun',
+  'şehirde olsun',
+  'evde olsun',
+  'bahçede olsun',
+  // ✅ Generic follow-up patterns
+  'ama bu sefer',
+  'bu sefer',
+  'şimdi de',
+  'bir de',
+  'aynı ama',
+  'aynısı ama',
+  'ayrıca',
+  // ✅ Make it X patterns
+  'olarak yap',
+  'şeklinde yap',
+  'gibi yap',
+  'tarzında yap',
+  // ✅ Color/style changes
+  'rengini',
+  'stilini',
+  'tarzını',
 ];
 
 // ==================== FARSÇA ====================

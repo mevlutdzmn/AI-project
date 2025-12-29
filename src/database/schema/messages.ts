@@ -20,5 +20,8 @@ export const messages = pgTable('messages', {
   inputType: text('input_type').default('text'), // 'text', 'voice', 'image' - ChatGPT-style tracking
   toolCalls: jsonb('tool_calls'), // Array of tool calls
   toolCallId: text('tool_call_id'), // For tool response messages
+  // ✅ Multi-turn image editing context (GPT-5.2 Responses API)
+  // Stores: { responseId: string, imageCallId: string, revisedPrompt?: string }
+  imageContext: jsonb('image_context'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });

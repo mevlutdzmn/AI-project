@@ -27,6 +27,14 @@ export class ChatSearchService {
   ) {}
 
   /**
+   * ✅ SECURITY FIX: Escape SQL LIKE special characters to prevent pattern injection
+   * Characters %, _ and \ have special meaning in LIKE patterns
+   */
+  private escapeLikePattern(term: string): string {
+    return term.replace(/[%_\\]/g, '\\$&');
+  }
+
+  /**
    * Search conversations and messages
    * Returns both session title matches and message content matches
    */
@@ -78,7 +86,8 @@ export class ChatSearchService {
   ): Promise<SearchResultItem[]> {
     try {
       const tsQuery = this.buildTsQuery(searchTerm);
-      const likePattern = `%${searchTerm}%`;
+      // ✅ SECURITY FIX: Escape LIKE special characters
+      const likePattern = `%${this.escapeLikePattern(searchTerm)}%`;
 
       const results = await this.db.execute(sql`
         SELECT 
@@ -137,7 +146,8 @@ export class ChatSearchService {
   ): Promise<SearchResultItem[]> {
     try {
       const tsQuery = this.buildTsQuery(searchTerm);
-      const likePattern = `%${searchTerm}%`;
+      // ✅ SECURITY FIX: Escape LIKE special characters
+      const likePattern = `%${this.escapeLikePattern(searchTerm)}%`;
 
       const results = await this.db.execute(sql`
         SELECT 

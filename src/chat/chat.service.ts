@@ -374,8 +374,8 @@ export class ChatService {
 
     const messageText = this.pdfService.extractMessageText(aiContent);
 
-    // Handle image request
-    if (mode === 'image' || this.imageService.isImageRequest(aiContent)) {
+    // Handle explicit image mode (when user selects image mode from UI)
+    if (mode === 'image') {
       const imageResponse = await this.imageService.handleImageRequest(
         sessionId,
         messageText || 'Generate an image',
@@ -385,19 +385,10 @@ export class ChatService {
       return { response: imageResponse, userMessageId: userMsg.id };
     }
 
-    // Handle image edit follow-up
-    if (this.imageService.isImageEditFollowUp(aiContent)) {
-      const hasRecentImage = await this.imageService.hasRecentImageInSession(sessionId);
-      if (hasRecentImage) {
-        const imageResponse = await this.imageService.handleImageRequest(
-          sessionId,
-          messageText || 'Edit the image',
-          model,
-          true,
-        );
-        return { response: imageResponse, userMessageId: userMsg.id };
-      }
-    }
+    // ✅ ChatGPT tarzı: Keyword kontrolü KALDIRILDI
+    // GPT kendisi karar verir - image_generation tool auto modda
+    // "uğur böceği çiz" → GPT görsel oluşturur
+    // "merhaba nasılsın" → GPT metin döner
 
     // Normal chat
     const history = await this.getRecentMessages(sessionId);
@@ -415,7 +406,7 @@ export class ChatService {
       };
     });
 
-    const { content: aiResponse, usage } = await this.openai.chat(chatMessages, model);
+    const { content: aiResponse, usage } = await this.openai.chat(chatMessages, model, undefined, sessionId);
 
     if (usage) {
       await this.usageService.logUsage(
@@ -497,33 +488,23 @@ export class ChatService {
 
     const messageText = this.pdfService.extractMessageText(aiContent);
 
-    // Handle image request
-    if (mode === 'image' || this.imageService.isImageRequest(aiContent)) {
+    // Handle explicit image mode (when user selects image mode from UI)
+    if (mode === 'image') {
+      const previousImageContext = await this.imageService.findPreviousImageContext(sessionId);
       const imageResponse = await this.imageService.handleImageRequest(
         sessionId,
         messageText || 'Generate an image',
         model,
         false,
+        previousImageContext,
       );
       onChunk(imageResponse);
       return { sessionId, userMessageId: userMsg.id };
     }
 
-    // Handle image edit follow-up
-    const isEditRequest = this.imageService.isImageEditFollowUp(aiContent);
-    if (isEditRequest) {
-      const hasRecentImage = await this.imageService.hasRecentImageInSession(sessionId);
-      if (hasRecentImage) {
-        const imageResponse = await this.imageService.handleImageRequest(
-          sessionId,
-          messageText || 'Edit the image',
-          model,
-          true,
-        );
-        onChunk(imageResponse);
-        return { sessionId, userMessageId: userMsg.id };
-      }
-    }
+    // ✅ ChatGPT tarzı: Keyword kontrolü KALDIRILDI
+    // GPT kendisi karar verir - image_generation tool auto modda
+    // Normal chat akışına devam et - GPT görsel oluşturmak isterse tool call yapar
 
     // Handle research mode
     if (mode === 'research') {
@@ -601,6 +582,7 @@ export class ChatService {
         onChunk(chunk);
       },
       model,
+      sessionId, // ✅ SECURITY: Pass sessionId for user-scoped context
     );
 
     const [assistantMsg] = await this.db
@@ -710,6 +692,8 @@ export class ChatService {
     const { content: response, usage } = await this.openai.chat(
       chatMessages,
       model || 'gpt-4o',
+      undefined,
+      sessionId, // ✅ SECURITY: Pass sessionId for user-scoped context
     );
 
     if (usage) {
@@ -784,6 +768,7 @@ export class ChatService {
           onChunk(chunk);
         },
         model,
+        undefined, // sessionId - new session so no context yet
       );
     } catch (error) {
       this.logger.error('[handleNewSessionWithAI] AI streaming failed:', error);

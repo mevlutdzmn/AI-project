@@ -34,39 +34,43 @@ export const RATE_LIMIT_KEY = 'rateLimit';
 /**
  * Default rate limit configurations per endpoint type
  * ✅ Professional production-ready limits
+ * NOTE: Development mode has higher limits (NOT in test environment)
  */
+const isDevelopment = process.env.NODE_ENV === 'development';
+const devMultiplier = isDevelopment ? 10 : 1; // 10x higher limits in dev only
+
 const DEFAULT_LIMITS: Record<string, RateLimitConfig> = {
   // 🔒 Authentication - strict to prevent brute force
-  auth: { windowMs: 60000, maxRequests: 5 }, // 5 req/min for login/register
-  'auth-verify': { windowMs: 60000, maxRequests: 3 }, // 3 req/min for verify/reset
+  auth: { windowMs: 60000, maxRequests: 5 * devMultiplier }, // 5 req/min for login/register
+  'auth-verify': { windowMs: 60000, maxRequests: 3 * devMultiplier }, // 3 req/min for verify/reset
 
   // 💬 Chat endpoints - moderate
-  chat: { windowMs: 60000, maxRequests: 30 }, // 30 req/min for chat messages
-  stream: { windowMs: 60000, maxRequests: 20 }, // 20 req/min for streaming
+  chat: { windowMs: 60000, maxRequests: 60 * devMultiplier }, // 60 req/min for chat (increased from 30)
+  stream: { windowMs: 60000, maxRequests: 20 * devMultiplier }, // 20 req/min for streaming
 
   // 🔬 AI-heavy operations - expensive, strict limits
-  research: { windowMs: 60000, maxRequests: 3 }, // 3 req/min for deep research
-  image: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for image generation
-  realtime: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for voice chat
+  research: { windowMs: 60000, maxRequests: 3 * devMultiplier }, // 3 req/min for deep research
+  image: { windowMs: 60000, maxRequests: 10 * devMultiplier }, // 10 req/min for image generation
+  realtime: { windowMs: 60000, maxRequests: 10 * devMultiplier }, // 10 req/min for voice chat
 
   // 📁 File operations
-  upload: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for uploads
+  upload: { windowMs: 60000, maxRequests: 10 * devMultiplier }, // 10 req/min for uploads
 
   // 🔊 Audio processing
-  tts: { windowMs: 60000, maxRequests: 20 }, // 20 req/min for TTS
-  transcribe: { windowMs: 60000, maxRequests: 15 }, // 15 req/min for transcription
+  tts: { windowMs: 60000, maxRequests: 20 * devMultiplier }, // 20 req/min for TTS
+  transcribe: { windowMs: 60000, maxRequests: 15 * devMultiplier }, // 15 req/min for transcription
 
   // 👨‍💼 Admin operations - moderate (trusted users)
-  admin: { windowMs: 60000, maxRequests: 100 }, // 100 req/min for admin
+  admin: { windowMs: 60000, maxRequests: 100 * devMultiplier }, // 100 req/min for admin
 
   // 💳 Payment operations - strict for security
-  payment: { windowMs: 60000, maxRequests: 10 }, // 10 req/min for payments
+  payment: { windowMs: 60000, maxRequests: 10 * devMultiplier }, // 10 req/min for payments
 
   // 🏥 Health checks - high limit for monitoring
-  health: { windowMs: 60000, maxRequests: 300 }, // 300 req/min for health checks
+  health: { windowMs: 60000, maxRequests: 300 * devMultiplier }, // 300 req/min for health checks
 
   // 📊 General API
-  default: { windowMs: 60000, maxRequests: 60 }, // 60 req/min default
+  default: { windowMs: 60000, maxRequests: 120 * devMultiplier }, // 120 req/min default (increased from 60)
 };
 
 @Injectable()

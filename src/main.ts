@@ -115,16 +115,7 @@ async function bootstrap() {
     }),
   );
 
-  // Serve static files for local development only
-  if (!process.env.VERCEL) {
-    app.use(
-      '/uploads',
-      express.static(join(process.cwd(), 'uploads'), {
-        maxAge: '1d', // ✅ Performance: Static dosyalar için cache
-        etag: true,
-      }),
-    );
-  }
+  // Static files now served via ServeStaticModule in app.module.ts
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 

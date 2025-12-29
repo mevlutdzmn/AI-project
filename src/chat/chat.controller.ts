@@ -398,10 +398,33 @@ export class ChatController {
 
   @Get('download-image')
   @ApiOperation({ summary: 'Download AI-generated image' })
-  @ApiQuery({ name: 'url', description: 'Image URL from OpenAI' })
+  @ApiQuery({ name: 'url', description: 'Image URL from OpenAI or local uploads' })
   @ApiResponse({ status: 200, description: 'Image downloaded' })
   async downloadImage(@Query('url') url: string, @Res() res: Response) {
     try {
+      const urlObj = new URL(url);
+      
+      // ✅ Local uploads - doğrudan dosyadan oku
+      if (urlObj.hostname === 'localhost' && urlObj.pathname.startsWith('/uploads/')) {
+        const filename = urlObj.pathname.replace('/uploads/', '');
+        const filepath = require('path').join(process.cwd(), 'uploads', filename);
+        const fs = require('fs');
+        
+        if (!fs.existsSync(filepath)) {
+          return res.status(HttpStatus.NOT_FOUND).send({ error: 'File not found' });
+        }
+        
+        const buffer = fs.readFileSync(filepath);
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="gooai-image-${Date.now()}.png"`,
+        );
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.send(buffer);
+      }
+      
+      // ✅ External URLs (OpenAI DALL-E)
       const allowedDomains = [
         'oaidalleapiprodscus.blob.core.windows.net',
         'dalleprodsec.blob.core.windows.net',
@@ -409,7 +432,6 @@ export class ChatController {
         'api.openai.com',
       ];
 
-      const urlObj = new URL(url);
       if (!allowedDomains.some((domain) => urlObj.hostname.includes(domain))) {
         return res
           .status(HttpStatus.FORBIDDEN)

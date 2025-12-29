@@ -4,27 +4,36 @@
  * Handles all image-related operations in chat:
  * - Image generation detection
  * - Image edit detection
- * - DALL-E image generation
- * - Multi-turn image editing
+ * - GPT-5.2 Responses API image generation (ChatGPT-style)
+ * - Multi-turn image editing via previous_response_id
  * 
  * @module chat/services/chat-image.service
- * @description Single Responsibility: Only handles image operations
+ * @description ChatGPT-style multi-turn image editing
  */
 
 import { Injectable, Logger } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { DRIZZLE } from '../../database/drizzle.provider';
+import * as fs from 'fs';
+import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../database/schema';
 import { messages, sessions } from '../../database/schema';
 import { eq, desc } from 'drizzle-orm';
-import { DalleAdapter } from '../../ai/adapters/dalle.adapter';
+import { OpenAIAdapter } from '../../ai/adapters/openai.adapter';
 import { UsersService } from '../../users/users.service';
 import {
   containsImageKeyword,
   containsImageEditKeyword,
-  extractImageModification,
 } from '../constants';
+
+// Image context stored in messages.image_context
+interface ImageContext {
+  responseId: string;
+  imageCallId: string;
+  revisedPrompt?: string;
+}
 
 @Injectable()
 export class ChatImageService {
@@ -32,7 +41,7 @@ export class ChatImageService {
 
   constructor(
     @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
-    private dalle: DalleAdapter,
+    private openai: OpenAIAdapter, // ✅ CHANGED: OpenAI instead of DALL-E
     private usersService: UsersService,
   ) {}
 
@@ -67,68 +76,74 @@ export class ChatImageService {
 
   /**
    * Check if this is a follow-up image editing request
-   * Returns true if the message contains image editing keywords
+   * Returns true if the message contains image editing keywords OR
+   * if it looks like a short modification command
    */
   isImageEditFollowUp(message: any): boolean {
     let messageText = '';
 
     if (typeof message === 'string') {
-      messageText = message.toLowerCase();
+      messageText = message.toLowerCase().trim();
     } else if (Array.isArray(message)) {
       messageText = message
         .filter((part: any) => part.type === 'text')
         .map((part: any) => part.text || '')
         .join(' ')
-        .toLowerCase();
+        .toLowerCase()
+        .trim();
     }
 
-    return containsImageEditKeyword(messageText);
+    // Check explicit edit keywords first
+    if (containsImageEditKeyword(messageText)) {
+      return true;
+    }
+    
+    // ✅ Smart detection: Short messages ending with common Turkish edit patterns
+    const wordCount = messageText.split(/\s+/).length;
+    if (wordCount <= 10) {
+      // Turkish edit patterns
+      const turkishEditPatterns = [
+        /olsun$/i,           // "...olsun" (let it be)
+        /yap$/i,             // "...yap" (make it)
+        /koy$/i,             // "...koy" (put it)
+        /ekle$/i,            // "...ekle" (add)
+        /çıkar$/i,           // "...çıkar" (remove)
+        /değiştir$/i,        // "...değiştir" (change)
+        /üstünde/i,          // "...üstünde" (on top of)
+        /üzerinde/i,         // "...üzerinde" (on)
+        /altında/i,          // "...altında" (under)
+        /yanında/i,          // "...yanında" (next to)
+        /içinde/i,           // "...içinde" (inside)
+        /arkasında/i,        // "...arkasında" (behind)
+        /önünde/i,           // "...önünde" (in front of)
+        /elinde/i,           // "...elinde" (in hand)
+        /elinin/i,           // "...elinin" (of hand)
+      ];
+      
+      for (const pattern of turkishEditPatterns) {
+        if (pattern.test(messageText)) {
+          this.logger.log(`[ImageEdit] Detected edit pattern: "${messageText}"`);
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   /**
    * Check if the last assistant message contains a generated image
    */
   async hasRecentImageInSession(sessionId: string): Promise<boolean> {
-    try {
-      const recentMessages = await this.db
-        .select()
-        .from(messages)
-        .where(eq(messages.sessionId, sessionId))
-        .orderBy(desc(messages.createdAt))
-        .limit(5);
-
-      for (const msg of recentMessages) {
-        if (msg.role === 'assistant' && typeof msg.content === 'string') {
-          if (
-            msg.content.includes('![Generated Image]') ||
-            msg.content.includes('![AI Generated Image]') ||
-            msg.content.includes('data:image/') ||
-            (msg.content.includes('![') &&
-              msg.content.includes('](data:image')) ||
-            (msg.content.includes('](http') &&
-              msg.content.includes('oaidalleapi'))
-          ) {
-            this.logger.log(
-              `[ImageEditCheck] Found recent image in session ${sessionId}`,
-            );
-            return true;
-          }
-        }
-      }
-      return false;
-    } catch (error) {
-      this.logger.error(
-        '[ImageEditCheck] Error checking recent images:',
-        error,
-      );
-      return false;
-    }
+    const ctx = await this.findPreviousImageContext(sessionId);
+    return ctx !== null;
   }
 
   /**
-   * Find the previous image generation prompt from user messages
+   * ✅ NEW: Find previous image context (responseId, imageCallId) from recent messages
+   * This replaces findPreviousImagePrompt() - ChatGPT uses IDs, not prompts!
    */
-  async findPreviousImagePrompt(sessionId: string): Promise<string | null> {
+  async findPreviousImageContext(sessionId: string): Promise<ImageContext | null> {
     try {
       const recentMessages = await this.db
         .select()
@@ -137,61 +152,35 @@ export class ChatImageService {
         .orderBy(desc(messages.createdAt))
         .limit(10);
 
-      // Check if recent assistant message has image
-      let foundImage = false;
       for (const msg of recentMessages) {
-        if (msg.role === 'assistant' && typeof msg.content === 'string') {
-          if (
-            msg.content.includes('![AI Generated Image]') ||
-            msg.content.includes('![Generated Image]')
-          ) {
-            foundImage = true;
-            break;
-          }
-        }
-      }
-
-      if (!foundImage) return null;
-
-      // Find user message before the image
-      for (let i = 0; i < recentMessages.length; i++) {
-        const msg = recentMessages[i];
-        if (
-          msg.role === 'assistant' &&
-          typeof msg.content === 'string' &&
-          (msg.content.includes('![AI Generated Image]') ||
-            msg.content.includes('![Generated Image]'))
-        ) {
-          for (let j = i + 1; j < recentMessages.length; j++) {
-            if (recentMessages[j].role === 'user') {
-              const userContent = recentMessages[j].content;
-              if (typeof userContent === 'string') {
-                this.logger.log(
-                  `[ImageEdit] Found previous prompt: "${userContent.substring(0, 50)}..."`,
-                );
-                return userContent;
-              }
-              break;
-            }
+        if (msg.role === 'assistant' && msg.imageContext) {
+          const ctx = msg.imageContext as ImageContext;
+          if (ctx.responseId && ctx.imageCallId) {
+            this.logger.log(
+              `[ImageContext] Found previous: responseId=${ctx.responseId}, callId=${ctx.imageCallId}`,
+            );
+            return ctx;
           }
         }
       }
 
       return null;
     } catch (error) {
-      this.logger.error('[ImageEdit] Error finding previous prompt:', error);
+      this.logger.error('[ImageContext] Error finding previous context:', error);
       return null;
     }
   }
 
   /**
-   * Handle image generation request
+   * Handle image generation request - ChatGPT style
+   * Uses GPT-5.2 Responses API with previous_response_id for multi-turn
    */
   async handleImageRequest(
     sessionId: string,
     prompt: string,
     model?: string,
     isEditRequest: boolean = false,
+    previousContext?: ImageContext | null,
   ): Promise<string> {
     try {
       const [session] = await this.db
@@ -223,47 +212,89 @@ export class ChatImageService {
       // Check image limit for free users
       if (!isAdmin && !hasActivePremium && imageCredits >= 1) {
         const limitMsg =
-          '🚫 **محدودیت ساخت تصویر شما تمام شد!**\n\n' +
-          'حساب‌های رایگان فقط می‌توانند **۱ تصویر** بسازند.\n\n' +
-          '✨ برای ساخت تصاویر نامحدود، به **پریمیوم ارتقا دهید**!';
+          '🚫 **Görsel oluşturma limitiniz doldu!**\n\n' +
+          'Ücretsiz hesaplar yalnızca **1 görsel** oluşturabilir.\n\n' +
+          '✨ Sınırsız görsel için **Premium**\'a yükseltin!';
 
         await this.saveAssistantMessage(sessionId, limitMsg, model);
         return limitMsg;
       }
 
-      let finalPrompt = prompt.trim();
-
-      // Multi-turn: If edit request, find previous prompt and combine
-      if (isEditRequest && finalPrompt) {
-        const previousPrompt = await this.findPreviousImagePrompt(sessionId);
-        if (previousPrompt) {
-          const modification = extractImageModification(finalPrompt);
-          finalPrompt = `${previousPrompt}. Style modification: ${modification}. Keep the same subject and composition.`;
-          this.logger.log(
-            `[ImageEdit] Combined prompt: "${finalPrompt.substring(0, 150)}..."`,
-          );
-        }
-      }
-
+      const finalPrompt = prompt.trim();
       if (!finalPrompt) {
-        const errorMsg = '❌ لطفاً توضیحی برای تصویر مورد نظر خود بنویسید.';
+        const errorMsg = '❌ Lütfen oluşturmak istediğiniz görseli açıklayın.';
         await this.saveAssistantMessage(sessionId, errorMsg, model);
         return errorMsg;
       }
 
-      // Generate image with DALL-E
-      const imageUrl = await this.dalle.generateImage(finalPrompt);
-      const imageResponse = `![AI Generated Image](${imageUrl})`;
+      let result: {
+        imageBase64: string;
+        responseId: string;
+        imageCallId: string;
+        revisedPrompt: string;
+      };
+
+      // ✅ ChatGPT-style: Use previous_response_id if available
+      const contextToUse = previousContext || (isEditRequest ? await this.findPreviousImageContext(sessionId) : null);
+      
+      if (contextToUse?.responseId) {
+        // Multi-turn: Edit existing image
+        this.logger.log(`[Image] Using previous_response_id: ${contextToUse.responseId}`);
+        result = await this.openai.editImage(
+          finalPrompt,
+          contextToUse.responseId,
+          sessionId,
+          model || 'gpt-5.2',
+        );
+      } else {
+        // New image generation
+        this.logger.log('[Image] Generating new image (no previous context)');
+        result = await this.openai.generateImage(finalPrompt, sessionId, model || 'gpt-5.2');
+      }
+
+      // ✅ Save image to disk instead of inline base64 (prevents site freezing)
+      const imageFileName = `img_${randomUUID()}.png`;
+      const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+      const imagePath = path.join(uploadsDir, imageFileName);
+      
+      // Ensure uploads directory exists
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      // Save base64 to file
+      const imageBuffer = Buffer.from(result.imageBase64, 'base64');
+      fs.writeFileSync(imagePath, imageBuffer);
+      
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+      const imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+      const imageResponse = `![Generated Image](${imageUrl})`;
+      
+      this.logger.log(`[Image] ✅ Generation successful - responseId: ${result.responseId}`);
+      this.logger.log(`[Image] ✅ Saved to: ${imagePath}, URL: ${imageUrl}`);
 
       // Increment image credits for non-admin users
       if (!isAdmin) {
+        this.logger.log(`[Image] Incrementing credits for user: ${session.userId}`);
         await this.usersService.incrementImageCredits(session.userId);
+        this.logger.log(`[Image] ✅ Credits incremented`);
       }
 
-      await this.saveAssistantMessage(sessionId, imageResponse, model);
+      // ✅ Save with imageContext for future multi-turn edits
+      this.logger.log(`[Image] Saving assistant message with imageContext...`);
+      await this.saveAssistantMessage(sessionId, imageResponse, model, {
+        responseId: result.responseId,
+        imageCallId: result.imageCallId,
+        revisedPrompt: result.revisedPrompt,
+      });
+      this.logger.log(`[Image] ✅ Message saved, returning response`);
+
       return imageResponse;
     } catch (error: unknown) {
-      this.logger.error('Image generation failed:', error instanceof Error ? error.message : 'Unknown error');
+      this.logger.error('[Image] ❌ CATCH BLOCK HIT!');
+      this.logger.error('[Image] Error type:', typeof error);
+      this.logger.error('[Image] Error message:', error instanceof Error ? error.message : 'Unknown');
+      this.logger.error('[Image] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error as object), 2));
       const errorMsg = this.getImageErrorMessage(error);
       await this.saveAssistantMessage(sessionId, errorMsg, model);
       return errorMsg;
@@ -271,18 +302,90 @@ export class ChatImageService {
   }
 
   /**
-   * Save assistant message to database
+   * ✅ ChatGPT-style: Let GPT decide what to do
+   * Send the user's message with previous_response_id and let GPT choose:
+   * - Generate/edit an image
+   * - Respond with text
+   */
+  async handleSmartImageRequest(
+    sessionId: string,
+    userMessage: string,
+    model?: string,
+    previousContext?: ImageContext | null,
+  ): Promise<{ isImageResponse: boolean; content: string }> {
+    try {
+      this.logger.log(`[SmartImage] User: "${userMessage}", hasContext: ${!!previousContext}`);
+      
+      if (!previousContext?.responseId) {
+        // No previous image context, this shouldn't happen but handle gracefully
+        return { isImageResponse: false, content: '' };
+      }
+
+      // ✅ ChatGPT-style: Send to GPT with previous_response_id
+      // GPT will decide based on context whether to generate image or respond with text
+      const result = await this.openai.smartImageRequest(
+        userMessage,
+        previousContext.responseId,
+        sessionId,
+        model || 'gpt-5.2',
+      );
+
+      // Check if GPT decided to generate an image
+      if (result.hasImage && result.imageBase64) {
+        // Save image to disk
+        const imageFileName = `img_${randomUUID()}.png`;
+        const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+        const imagePath = path.join(uploadsDir, imageFileName);
+        
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        const imageBuffer = Buffer.from(result.imageBase64, 'base64');
+        fs.writeFileSync(imagePath, imageBuffer);
+        
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+        const imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+        const imageResponse = `![Generated Image](${imageUrl})`;
+        
+        this.logger.log(`[SmartImage] ✅ GPT generated image - saved to: ${imagePath}`);
+        
+        // Save with new context
+        await this.saveAssistantMessage(sessionId, imageResponse, model, {
+          responseId: result.responseId,
+          imageCallId: result.imageCallId || '',
+          revisedPrompt: result.revisedPrompt || userMessage,
+        });
+        
+        return { isImageResponse: true, content: imageResponse };
+      }
+
+      // GPT responded with text, not an image
+      this.logger.log(`[SmartImage] GPT chose text response (not image)`);
+      return { isImageResponse: false, content: result.textResponse || '' };
+      
+    } catch (error) {
+      this.logger.error('[SmartImage] Error:', error);
+      // On error, fall back to normal chat flow
+      return { isImageResponse: false, content: '' };
+    }
+  }
+
+  /**
+   * Save assistant message with optional image context
    */
   private async saveAssistantMessage(
     sessionId: string,
     content: string,
     model?: string,
+    imageContext?: ImageContext,
   ): Promise<void> {
     await this.db.insert(messages).values({
       sessionId,
       role: 'assistant',
       content,
       model,
+      imageContext: imageContext || null, // ✅ Store for multi-turn
     });
 
     await this.db
@@ -295,23 +398,21 @@ export class ChatImageService {
    * Get user-friendly error message for image generation failures
    */
   private getImageErrorMessage(error: any): string {
-    if (error.message.includes('safety system')) {
+    const msg = error?.message || '';
+    
+    if (msg.includes('safety') || msg.includes('content_policy')) {
       return (
-        '⚠️ درخواست شما توسط سیستم امنیتی رد شد.\n\n' +
-        'لطفاً:\n• از کلمات مناسب و محترمانه استفاده کنید\n' +
-        '• محتوای حساس، خشونت‌آمیز یا نامناسب درخواست نکنید\n' +
-        '• توضیحات واضح‌تر برای تصویر مورد نظر بنویسید'
+        '⚠️ **Güvenlik Uyarısı**\n\n' +
+        'İsteğiniz güvenlik filtreleri tarafından reddedildi.\n\n' +
+        'Lütfen:\n• Uygun ve saygılı ifadeler kullanın\n' +
+        '• Hassas, şiddet içeren veya uygunsuz içerik talep etmeyin'
       );
     }
 
-    if (error.message.includes('400')) {
-      return '⚠️ درخواست نامعتبر. لطفاً توضیحات واضح‌تری برای تصویر بنویسید.';
+    if (msg.includes('rate') || msg.includes('429')) {
+      return '⏳ Çok fazla istek gönderildi. Lütfen birkaç dakika bekleyin.';
     }
 
-    if (error.message.includes('429') || error.message.includes('rate')) {
-      return '⏳ تعداد درخواست‌ها بیش از حد مجاز است. لطفاً چند دقیقه صبر کنید.';
-    }
-
-    return '❌ تولید تصویر با خطا مواجه شد. لطفاً دوباره تلاش کنید.';
+    return '❌ Görsel oluşturma başarısız oldu. Lütfen tekrar deneyin.';
   }
 }
