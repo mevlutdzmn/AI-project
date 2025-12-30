@@ -438,18 +438,22 @@ export class OpenAIAdapter {
     ];
     const wantsHighQuality = highQualityKeywords.some(kw => lastUserMessage.includes(kw));
 
-    // ✅ ChatGPT tarzı: Her zaman image_generation tool'u ekle
-    // tool_choice default "auto" - GPT kendisi karar verir
-    // Kullanıcı "çiz" derse → GPT görsel oluşturur
-    // Kullanıcı "merhaba" derse → GPT metin döner
-    // ✅ Default kalite HIGH - ChatGPT gibi yüksek kaliteli görseller
-    requestParams.tools = [
-      {
-        type: 'image_generation',
-        quality: 'high', // Always high quality like ChatGPT
-        background: wantsTransparent ? 'transparent' : 'auto',
-      },
-    ];
+    // ✅ FIX: image_generation tool'u sadece mode === 'image' olduğunda ekle
+    // Önceki yaklaşım (her zaman ekle, GPT karar versin) sorunlara yol açıyordu:
+    // - GPT önceki görsel context'ini yanlış kullanıyordu
+    // - "kedi" yazınca "at" çiziyordu (önceki görsel context'inden)
+    // Şimdi: Kullanıcı görsel istiyorsa image mode seçmeli
+    if (mode === 'image') {
+      requestParams.tools = [
+        {
+          type: 'image_generation',
+          quality: 'high',
+          background: wantsTransparent ? 'transparent' : 'auto',
+        },
+      ];
+      requestParams.tool_choice = 'required'; // Görsel modunda mutlaka görsel oluştur
+      this.logger.log('[GPT-5 Image] Image mode active - tool_choice: required');
+    }
 
     if (wantsTransparent) {
       this.logger.log('[GPT-5 Image] User requested transparent background');
@@ -466,12 +470,17 @@ export class OpenAIAdapter {
       ];
     }
 
-    // ✅ SECURITY FIX: Use session-scoped context instead of shared instance variable
-    if (ctx.responseId) {
-      requestParams.previous_response_id = ctx.responseId;
-    }
+    // ✅ FIX: previous_response_id KULLANMA - karışıklığa yol açıyor
+    // Problem: Kullanıcı "kedi" dediğinde, önceki "at" görselinin context'i
+    // taşınıyor ve GPT yanlış sonuç üretiyor.
+    // ChatGPT'nin conversation memory'si mesaj history'den geliyor,
+    // previous_response_id'den değil. Bu ID sadece çok spesifik durumlarda kullanılmalı.
+    // if (ctx.responseId && mode !== 'image') {
+    //   requestParams.previous_response_id = ctx.responseId;
+    // }
 
-    // Multi-turn image editing: include last image_generation_call reference
+    // Multi-turn image editing: image_generation_call sadece EXPLICIT image mode'da kullanılacak
+    // Bu da sadece handleImageRequest üzerinden edit yapıldığında aktif olur
     if (mode === 'image' && ctx.imageGenerationCallId) {
       this.logger.log(
         `[GPT-5 Image] Multi-turn: using previous image_generation_call.id: ${ctx.imageGenerationCallId}`,
@@ -908,9 +917,13 @@ export class OpenAIAdapter {
     // Sort by length descending to match longer phrases first
     const sortedKeys = Object.keys(translations).sort((a, b) => b.length - a.length);
     
+    // ✅ FIX: Use word boundary matching to prevent partial replacements
+    // Problem: "kedi" → "a cat" → "a ca horse" (because "at" in "cat" matched "at": "a horse")
     for (const turkish of sortedKeys) {
-      if (result.includes(turkish)) {
-        result = result.replace(new RegExp(turkish, 'gi'), translations[turkish]);
+      // Use word boundary regex to match whole words only
+      const wordBoundaryRegex = new RegExp(`\\b${turkish}\\b`, 'gi');
+      if (wordBoundaryRegex.test(result)) {
+        result = result.replace(wordBoundaryRegex, translations[turkish]);
       }
     }
     

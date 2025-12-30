@@ -56,12 +56,14 @@ export class ImageController {
     }
 
     try {
-      const imageUrl = await this.dalleAdapter.generateImage(prompt);
+      const result = await this.dalleAdapter.generateImageFull(prompt);
       await this.userService.incrementImageCredits(userId);
 
       return {
         success: true,
-        imageUrl,
+        imageUrl: result.url,
+        enhancedPrompt: result.enhancedPrompt,
+        styleUsed: result.styleUsed,
         prompt,
         creditsUsed: imageCredits + 1,
         isPremium: user.isPremium && !premiumExpired,

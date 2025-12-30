@@ -7,3 +7,4 @@
  */
 
 export * from './ai-adapter.interface';
+export * from './image-provider.interface';

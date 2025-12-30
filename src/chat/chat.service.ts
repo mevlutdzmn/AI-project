@@ -385,10 +385,34 @@ export class ChatService {
       return { response: imageResponse, userMessageId: userMsg.id };
     }
 
-    // ✅ ChatGPT tarzı: Keyword kontrolü KALDIRILDI
-    // GPT kendisi karar verir - image_generation tool auto modda
-    // "uğur böceği çiz" → GPT görsel oluşturur
-    // "merhaba nasılsın" → GPT metin döner
+    // ✅ ChatGPT tarzı: Keyword ile görsel isteği algıla
+    // "kedi çiz", "resim yap" gibi isteklerde otomatik görsel moduna geç
+    // Bu, mode === 'chat' iken bile görsel oluşturmayı sağlar
+    if (this.imageService.isImageRequest(aiContent)) {
+      const imageResponse = await this.imageService.handleImageRequest(
+        sessionId,
+        messageText || 'Generate an image',
+        model,
+        false,
+      );
+      return { response: imageResponse, userMessageId: userMsg.id };
+    }
+
+    // ✅ Multi-turn image editing: "insan binsin", "daha büyük olsun" gibi kısa edit istekleri
+    // Önceki görsel varsa, edit olarak işle
+    if (this.imageService.isImageEditFollowUp(aiContent)) {
+      const previousImageContext = await this.imageService.findPreviousImageContext(sessionId);
+      if (previousImageContext) {
+        const imageResponse = await this.imageService.handleImageRequest(
+          sessionId,
+          messageText || 'Edit the image',
+          model,
+          true, // isEditRequest = true
+          previousImageContext,
+        );
+        return { response: imageResponse, userMessageId: userMsg.id };
+      }
+    }
 
     // Normal chat
     const history = await this.getRecentMessages(sessionId);
@@ -502,9 +526,35 @@ export class ChatService {
       return { sessionId, userMessageId: userMsg.id };
     }
 
-    // ✅ ChatGPT tarzı: Keyword kontrolü KALDIRILDI
-    // GPT kendisi karar verir - image_generation tool auto modda
-    // Normal chat akışına devam et - GPT görsel oluşturmak isterse tool call yapar
+    // ✅ ChatGPT tarzı: Keyword ile görsel isteği algıla
+    // "kedi çiz", "resim yap" gibi isteklerde otomatik görsel moduna geç
+    if (this.imageService.isImageRequest(aiContent)) {
+      const imageResponse = await this.imageService.handleImageRequest(
+        sessionId,
+        messageText || 'Generate an image',
+        model,
+        false,
+      );
+      onChunk(imageResponse);
+      return { sessionId, userMessageId: userMsg.id };
+    }
+
+    // ✅ Multi-turn image editing: "insan binsin", "daha büyük olsun" gibi kısa edit istekleri
+    // Önceki görsel varsa, edit olarak işle
+    if (this.imageService.isImageEditFollowUp(aiContent)) {
+      const previousImageContext = await this.imageService.findPreviousImageContext(sessionId);
+      if (previousImageContext) {
+        const imageResponse = await this.imageService.handleImageRequest(
+          sessionId,
+          messageText || 'Edit the image',
+          model,
+          true, // isEditRequest = true
+          previousImageContext,
+        );
+        onChunk(imageResponse);
+        return { sessionId, userMessageId: userMsg.id };
+      }
+    }
 
     // Handle research mode
     if (mode === 'research') {
