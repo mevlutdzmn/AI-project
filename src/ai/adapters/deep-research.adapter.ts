@@ -330,7 +330,8 @@ export class DeepResearchAdapter {
    * Start a new research session - returns session ID immediately
    */
   startResearch(query: string): { id: string; status: string } {
-    const sessionId = `research-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // ✅ Security: Use crypto.randomUUID instead of Math.random
+    const sessionId = `research-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`;
 
     const session: ResearchSession = {
       id: sessionId,

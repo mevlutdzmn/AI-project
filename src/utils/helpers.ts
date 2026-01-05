@@ -1,12 +1,10 @@
 /**
  * Common helper functions
  */
+import * as crypto from 'crypto';
 
 export function generateRandomString(length: number): string {
-  return Array(length)
-    .fill(null)
-    .map(() => Math.round(Math.random() * 16).toString(16))
-    .join('');
+  return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
 }
 
 export function formatDate(date: Date): string {

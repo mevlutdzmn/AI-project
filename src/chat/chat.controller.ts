@@ -304,6 +304,13 @@ export class ChatController {
     return this.chatService.deleteSession(sessionId, req.user.id);
   }
 
+  @Delete('sessions')
+  @ApiOperation({ summary: 'Delete all chat sessions for user' })
+  @ApiResponse({ status: 200, description: 'All sessions deleted' })
+  async deleteAllSessions(@Req() req) {
+    return this.chatService.deleteAllSessions(req.user.id);
+  }
+
   @Get('sessions/pinned')
   @ApiOperation({ summary: 'Get pinned sessions' })
   @ApiResponse({ status: 200, description: 'Pinned sessions list' })

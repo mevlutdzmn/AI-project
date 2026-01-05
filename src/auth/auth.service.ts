@@ -521,7 +521,8 @@ export class AuthService {
   async handleGoogleLogin(googleUser: any) {
     let user = await this.userService.findByEmail(googleUser.email);
     if (!user) {
-      const randomPassword = Math.random().toString(36).slice(-12);
+      // ✅ Security: Use crypto.randomBytes instead of Math.random for password generation
+      const randomPassword = crypto.randomBytes(16).toString('base64').slice(0, 16);
       const hashedPassword = await PasswordHasher.hash(randomPassword);
       const [newUser] = await this.db
         .insert(users)

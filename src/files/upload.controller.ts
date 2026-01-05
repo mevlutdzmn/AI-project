@@ -22,6 +22,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 import { UploadService } from './upload.service';
 import axios from 'axios';
 
@@ -97,10 +98,8 @@ const localMulterOptions = {
       cb(null, dest);
     },
     filename: (req, file, cb) => {
-      const randomName = Array(32)
-        .fill(null)
-        .map(() => Math.round(Math.random() * 16).toString(16))
-        .join('');
+      // ✅ Security: Use crypto.randomBytes instead of Math.random
+      const randomName = crypto.randomBytes(16).toString('hex');
       cb(null, `${randomName}${extname(file.originalname)}`);
     },
   }),
@@ -154,10 +153,8 @@ export class UploadController {
     if (isVercel) {
       try {
         const { put } = await import('@vercel/blob');
-        const randomName = Array(32)
-          .fill(null)
-          .map(() => Math.round(Math.random() * 16).toString(16))
-          .join('');
+        // ✅ Security: Use crypto.randomBytes instead of Math.random
+        const randomName = crypto.randomBytes(16).toString('hex');
         const fileName = `${randomName}${extname(file.originalname)}`;
 
         const blob = await put(fileName, file.buffer, {
@@ -290,10 +287,8 @@ export class UploadController {
       }
 
       const buffer = Buffer.from(response.data);
-      const randomName = Array(32)
-        .fill(null)
-        .map(() => Math.round(Math.random() * 16).toString(16))
-        .join('');
+      // ✅ Security: Use crypto.randomBytes instead of Math.random
+      const randomName = crypto.randomBytes(16).toString('hex');
       const fileName = `${randomName}.png`;
 
       let savedUrl: string;

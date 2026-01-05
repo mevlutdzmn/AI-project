@@ -182,6 +182,24 @@ export class ChatService {
     return { success: true };
   }
 
+  async deleteAllSessions(userId: number) {
+    // Soft delete all sessions for the user (both normal and archived)
+    await this.db
+      .update(sessions)
+      .set({
+        isDeleted: true,
+        deletedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          eq(sessions.isDeleted, false)
+        )
+      );
+
+    return { success: true, message: 'All chats deleted successfully' };
+  }
+
   async updateSession(sessionId: string, userId: number, title: string) {
     await this.ensureSessionOwnership(sessionId, userId);
 
