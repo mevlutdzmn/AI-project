@@ -1,14 +1,24 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DRIZZLE } from '../database/drizzle.provider';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../database/schema';
 import { users, payments, sessions, messages } from '../database/schema';
-import { eq, desc, count, sql, gte } from 'drizzle-orm';
+import { eq, desc, count, sql, gte, ilike } from 'drizzle-orm';
 import { PasswordHasher } from '../common/utils/password-hasher';
+import { CreateUserDto, UpdateUserDto } from './dto';
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(@Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>) {}
+
+  /**
+   * Escape special characters in LIKE patterns to prevent SQL injection
+   */
+  private escapeLikePattern(term: string): string {
+    return term.replace(/[%_\\]/g, '\\$&');
+  }
 
   async getStats() {
     const [totalUsers] = await this.db.select({ count: count() }).from(users);
@@ -48,15 +58,22 @@ export class AdminService {
 
   async getUsers(page: number = 1, limit: number = 10, search: string = '') {
     const offset = (page - 1) * limit;
+    // Sanitize limit and page to prevent injection
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const safePage = Math.max(1, page);
+    const safeOffset = (safePage - 1) * safeLimit;
+    
     let usersList;
 
     if (search) {
+      // ✅ Escape special LIKE characters to prevent SQL injection
+      const safeSearch = this.escapeLikePattern(search.trim());
       usersList = await this.db
         .select()
         .from(users)
-        .where(sql`${users.email} ILIKE ${`%${search}%`}`)
-        .limit(limit)
-        .offset(offset)
+        .where(ilike(users.email, `%${safeSearch}%`))
+        .limit(safeLimit)
+        .offset(safeOffset)
         .orderBy(desc(users.createdAt));
     } else {
       usersList = await this.db
@@ -92,8 +109,10 @@ export class AdminService {
     return safeUser;
   }
 
-  async createUser(data: any) {
-    const { email, password, isAdmin = false, active = true } = data;
+  async createUser(data: CreateUserDto) {
+    const { email, password, isAdmin = false, active = true, isPremium = false, premiumDays = 30 } = data;
+    
+    this.logger.log(`Creating user: ${email}`);
 
     const [existing] = await this.db
       .select()
@@ -124,8 +143,10 @@ export class AdminService {
     return safeUser;
   }
 
-  async updateUser(id: number, data: any) {
-    const updates: any = {};
+  async updateUser(id: number, data: UpdateUserDto) {
+    const updates: Partial<typeof users.$inferInsert> = {};
+    
+    this.logger.log(`Updating user: ${id}`);
 
     if (data.email) updates.email = data.email;
     if (data.password) {

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Post,
   Put,
   Query,
@@ -19,11 +20,13 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CreateUserDto, UpdateUserDto } from './dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -73,11 +76,12 @@ export class AdminController {
 
   @Post('users')
   @ApiOperation({ summary: 'Create new user' })
+  @ApiBody({ type: CreateUserDto })
   @ApiResponse({ status: 201, description: 'User created' })
   @ApiResponse({ status: 400, description: 'Invalid data' })
-  async createUser(@Body() body: any) {
+  async createUser(@Body() createUserDto: CreateUserDto) {
     try {
-      return await this.adminService.createUser(body);
+      return await this.adminService.createUser(createUserDto);
     } catch (error: unknown) {
       throw new HttpException(error instanceof Error ? error.message : 'Unknown error', HttpStatus.BAD_REQUEST);
     }
@@ -86,10 +90,14 @@ export class AdminController {
   @Put('users/:id')
   @ApiOperation({ summary: 'Update user' })
   @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiBody({ type: UpdateUserDto })
   @ApiResponse({ status: 200, description: 'User updated' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async updateUser(@Param('id') id: string, @Body() body: any) {
-    const user = await this.adminService.updateUser(parseInt(id), body);
+  async updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    const user = await this.adminService.updateUser(id, updateUserDto);
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }

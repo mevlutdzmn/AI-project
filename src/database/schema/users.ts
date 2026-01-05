@@ -5,6 +5,7 @@ import {
   serial,
   text,
   timestamp,
+  index,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -22,4 +23,9 @@ export const users = pgTable('users', {
   resetToken: text('reset_token'),
   resetTokenExpiry: timestamp('reset_token_expiry'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // ✅ Performance indexes for frequently queried columns
+  emailIdx: index('idx_users_email').on(table.email),
+  createdAtIdx: index('idx_users_created_at').on(table.createdAt),
+  isPremiumIdx: index('idx_users_is_premium').on(table.isPremium),
+}));

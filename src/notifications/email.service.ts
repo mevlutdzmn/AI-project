@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { randomInt } from 'crypto';
 
 @Injectable()
 export class EmailService {
@@ -26,8 +27,12 @@ export class EmailService {
     });
   }
 
+  /**
+   * Generate cryptographically secure 6-digit verification code
+   */
   generateVerificationCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // ✅ Use crypto.randomInt instead of Math.random for security
+    return randomInt(100000, 999999).toString();
   }
 
   async sendVerificationEmail(email: string, code: string): Promise<boolean> {

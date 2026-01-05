@@ -6,6 +6,7 @@ import {
   timestamp,
   jsonb,
   uuid,
+  index,
 } from 'drizzle-orm/pg-core';
 import { sessions } from './sessions';
 
@@ -24,4 +25,9 @@ export const messages = pgTable('messages', {
   // Stores: { responseId: string, imageCallId: string, revisedPrompt?: string }
   imageContext: jsonb('image_context'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+}, (table) => ({
+  // ✅ Performance indexes for frequently queried columns
+  sessionIdIdx: index('idx_messages_session_id').on(table.sessionId),
+  createdAtIdx: index('idx_messages_created_at').on(table.createdAt),
+  sessionIdCreatedAtIdx: index('idx_messages_session_created').on(table.sessionId, table.createdAt),
+}));
