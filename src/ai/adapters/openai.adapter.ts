@@ -39,6 +39,107 @@ console.log("Hello");
 - For inline code, use single backticks: \`code\`
 - This is critical for proper syntax highlighting.`;
 
+// ============================================
+// Function Calling / Tools Definitions
+// ============================================
+// ChatGPT-style: AI decides when to use these tools
+// No keyword detection needed - AI understands intent
+
+/**
+ * Tool definitions for OpenAI Function Calling (GPT-4o)
+ * AI will automatically call these when user requests image generation
+ * Works for ALL languages - no keyword lists needed!
+ */
+const FUNCTION_CALLING_TOOLS = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'generate_image',
+      description: `Generate an AI image when user asks for any visual/image/picture/drawing.
+
+Use this tool when user wants an image created:
+- Turkish: "kedi çiz", "resim yap", "görsel oluştur", "bir X çiz"
+- English: "draw a cat", "create an image", "generate a picture"
+- Persian: "یه گربه بکش", "تصویر بساز"
+
+IMPORTANT - Format detection:
+- If user mentions "png", "PNG", "şeffaf", "transparent" → set format to "png"
+- Otherwise → set format to "jpg" (default)
+
+Examples:
+- "kedi çiz" → format: "jpg"
+- "kedi png çiz" → format: "png"
+- "şeffaf arkaplan ile logo yap" → format: "png"
+- "draw a cat with transparent background" → format: "png"`,
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description: 'Detailed English description of the image to generate.',
+          },
+          format: {
+            type: 'string',
+            enum: ['jpg', 'png'],
+            description: 'Image format. Use "png" ONLY if user explicitly mentions png/PNG/şeffaf/transparent. Default is "jpg".',
+          },
+          style: {
+            type: 'string',
+            enum: ['realistic', 'cartoon', 'anime', 'artistic', 'minimalist', 'photorealistic'],
+            description: 'The visual style of the image. Default is realistic.',
+          },
+        },
+        required: ['prompt', 'format'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'edit_image',
+      description: `Edit or modify the previously generated image using AI. 
+
+Use this tool when there's a recent image AND user wants ANY changes:
+- Format changes: "png yap", "jpg yap", "transparent yap"
+- Size changes: "daha büyük olsun", "küçült"
+- Add elements: "şapka ekle", "kuş ekle"
+- Style changes: "daha renkli", "realistic yap"
+- Background: "arkaplanı kaldır", "şeffaf arkaplan"
+
+IMPORTANT - Format detection for edits:
+- "png yap", "png olsun" → set format to "png"
+- "jpg yap" → set format to "jpg"
+- Other edits → keep format as null (don't change)`,
+      parameters: {
+        type: 'object',
+        properties: {
+          modification: {
+            type: 'string',
+            description: 'English description of what to change in the image.',
+          },
+          format: {
+            type: 'string',
+            enum: ['jpg', 'png'],
+            description: 'New format if user wants to change it. Only set if user explicitly asks for format change.',
+          },
+        },
+        required: ['modification'],
+      },
+    },
+  },
+];
+
+/**
+ * Result type for Function Calling response
+ */
+export interface FunctionCallResult {
+  type: 'text' | 'function_call';
+  content?: string;
+  functionName?: string;
+  functionArgs?: Record<string, any>;
+  usage?: { promptTokens: number; completionTokens: number };
+}
+
 export interface MessageContentPart {
   type: 'text' | 'image_url' | 'file_url';
   text?: string;
@@ -243,6 +344,241 @@ export class OpenAIAdapter {
     } catch (error: unknown) {
       this.logger.error('OpenAI API Error:', error);
       throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * ✅ ChatGPT-style Function Calling for GPT-4o
+   * 
+   * Instead of keyword detection, we let the AI decide:
+   * - If user wants an image → AI calls generate_image/edit_image function
+   * - If user wants text → AI responds with text
+   * 
+   * Works for ALL languages without keyword lists!
+   * "kedi çiz" = "draw a cat" = "یه گربه بکش" - AI understands all!
+   * 
+   * @param messages - Conversation history
+   * @param model - GPT model to use (GPT-4o recommended)
+   * @param hasRecentImage - Whether there's a recent image in conversation (for edit context)
+   * @param sessionId - Session ID for context management
+   * @returns FunctionCallResult - Either text response or function call details
+   */
+  async chatWithFunctionCalling(
+    messages: ChatMessage[],
+    model: string = 'gpt-4o',
+    hasRecentImage: boolean = false,
+    sessionId?: string,
+  ): Promise<FunctionCallResult> {
+    try {
+      if (!this.client) {
+        throw new Error('OpenAI client not initialized');
+      }
+
+      // For GPT-5, use native Responses API with image_generation tool
+      if (model.startsWith('gpt-5')) {
+        return this.chatWithFunctionCallingGPT5(messages, model, hasRecentImage, sessionId);
+      }
+
+      // ✅ GPT-4o: Use Chat Completions API with Function Calling
+      const openAIMessages = this.convertToOpenAIMessages(messages);
+      
+      // Build system prompt with context about recent image
+      let systemPrompt = CHATGPT_SYSTEM_PROMPT;
+      if (hasRecentImage) {
+        systemPrompt += `\n\nNOTE: There is a recently generated image in this conversation. 
+If the user's message seems to be a modification request (like "make it bigger", "add something", "change color"), 
+use the edit_image function. Short messages after image generation are often edit requests.`;
+      }
+
+      const messagesWithSystem: OpenAIMessage[] = [
+        { role: 'system', content: systemPrompt },
+        ...openAIMessages,
+      ];
+
+      this.logger.log(`[FunctionCalling] Sending to GPT-4o with ${FUNCTION_CALLING_TOOLS.length} tools, hasRecentImage: ${hasRecentImage}`);
+
+      const response = await (this.client as any).chat.completions.create({
+        model,
+        messages: messagesWithSystem,
+        tools: FUNCTION_CALLING_TOOLS,
+        tool_choice: 'auto', // ✅ Let AI decide when to use tools
+        max_tokens: 4096,
+        temperature: 0.7,
+      });
+
+      const choice = response.choices[0];
+      const usage = response.usage ? {
+        promptTokens: response.usage.prompt_tokens || 0,
+        completionTokens: response.usage.completion_tokens || 0,
+      } : undefined;
+
+      // Check if AI decided to call a function
+      if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+        const toolCall = choice.message.tool_calls[0];
+        const functionName = toolCall.function.name;
+        const functionArgs = JSON.parse(toolCall.function.arguments || '{}');
+
+        this.logger.log(`[FunctionCalling] ✅ AI decided to call: ${functionName}`);
+        this.logger.log(`[FunctionCalling] Args: ${JSON.stringify(functionArgs)}`);
+
+        return {
+          type: 'function_call',
+          functionName,
+          functionArgs,
+          usage,
+        };
+      }
+
+      // AI decided to respond with text (no image request detected)
+      const content = choice.message.content || '';
+      this.logger.log(`[FunctionCalling] AI responded with text (no function call)`);
+
+      return {
+        type: 'text',
+        content,
+        usage,
+      };
+    } catch (error: unknown) {
+      this.logger.error('[FunctionCalling] Error:', error);
+      throw new Error(`Function Calling Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * ✅ GPT-5.2 version of Function Calling using native Responses API
+   * GPT-5.2 has native image_generation tool, no need for DALL-E separate call
+   */
+  private async chatWithFunctionCallingGPT5(
+    messages: ChatMessage[],
+    model: string = 'gpt-5.2',
+    hasRecentImage: boolean = false,
+    sessionId?: string,
+  ): Promise<FunctionCallResult> {
+    if (!this.client) {
+      throw new Error('OpenAI client not initialized');
+    }
+
+    const ctx = sessionId 
+      ? this.getContext(sessionId) 
+      : { responseId: null, imageGenerationCallId: null, lastUsed: Date.now() };
+
+    // Build system prompt
+    let systemPrompt = CHATGPT_SYSTEM_PROMPT;
+    if (hasRecentImage) {
+      systemPrompt += `\n\nNOTE: There is a recently generated image in this conversation. 
+If the user wants to modify it, generate a new version with the requested changes.`;
+    }
+
+    const messagesWithSystem: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...messages,
+    ];
+
+    const inputMessages = this.convertToResponsesAPIFormat(messagesWithSystem);
+    const baseModel = this.getBaseModel(model);
+
+    this.logger.log(`[FunctionCalling GPT-5] Model: ${baseModel}, hasRecentImage: ${hasRecentImage}`);
+
+    // ✅ Key: Always include image_generation tool, but with tool_choice: 'auto'
+    // AI decides when to generate images - no keyword detection needed!
+    const requestParams: any = {
+      model: baseModel,
+      input: inputMessages.slice(-50), // Keep last 50 messages for context
+      tools: [
+        {
+          type: 'image_generation',
+          quality: 'high',
+          background: 'auto',
+        },
+      ],
+      // ✅ NO tool_choice: 'required' - let AI decide naturally!
+      store: true,
+    };
+
+    // Add reasoning effort for thinking models
+    const effort = this.getReasoningEffort(model);
+    if (effort) {
+      requestParams.reasoning = { effort };
+    }
+
+    // If we have previous image context and user might be editing, add it
+    if (hasRecentImage && ctx.responseId) {
+      requestParams.previous_response_id = ctx.responseId;
+      this.logger.log(`[FunctionCalling GPT-5] Using previous_response_id: ${ctx.responseId}`);
+    }
+
+    try {
+      const response = await (this.client as any).responses.create(requestParams);
+
+      // Store new response ID
+      ctx.responseId = response.id;
+
+      // Check if AI generated an image
+      const imageCall = (response.output || []).find(
+        (o: any) => o.type === 'image_generation_call',
+      );
+
+      if (imageCall && imageCall.result) {
+        // AI decided to generate an image
+        ctx.imageGenerationCallId = imageCall.id;
+        
+        this.logger.log(`[FunctionCalling GPT-5] ✅ AI generated image - responseId: ${response.id}`);
+
+        return {
+          type: 'function_call',
+          functionName: hasRecentImage ? 'edit_image' : 'generate_image',
+          functionArgs: {
+            imageBase64: imageCall.result,
+            responseId: response.id,
+            imageCallId: imageCall.id,
+            revisedPrompt: imageCall.revised_prompt || '',
+          },
+        };
+      }
+
+      // AI responded with text
+      const textContent = response.output_text || '';
+      this.logger.log(`[FunctionCalling GPT-5] AI responded with text`);
+
+      return {
+        type: 'text',
+        content: textContent,
+      };
+    } catch (error: any) {
+      // Handle context length errors with truncation
+      if (error?.code === 'context_length_exceeded' || 
+          /context_length_exceeded/i.test(error?.message || '')) {
+        this.logger.warn('[FunctionCalling GPT-5] Context too long, retrying with less history');
+        requestParams.input = inputMessages.slice(-10);
+        
+        const response = await (this.client as any).responses.create(requestParams);
+        ctx.responseId = response.id;
+
+        const imageCall = (response.output || []).find(
+          (o: any) => o.type === 'image_generation_call',
+        );
+
+        if (imageCall && imageCall.result) {
+          ctx.imageGenerationCallId = imageCall.id;
+          return {
+            type: 'function_call',
+            functionName: hasRecentImage ? 'edit_image' : 'generate_image',
+            functionArgs: {
+              imageBase64: imageCall.result,
+              responseId: response.id,
+              imageCallId: imageCall.id,
+              revisedPrompt: imageCall.revised_prompt || '',
+            },
+          };
+        }
+
+        return {
+          type: 'text',
+          content: response.output_text || '',
+        };
+      }
+
+      throw error;
     }
   }
 

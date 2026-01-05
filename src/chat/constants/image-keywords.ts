@@ -1,11 +1,25 @@
 /**
- * Image Generation Keywords
+ * ⚠️ DEPRECATED - Image Generation Keywords
  * 
- * Multi-language keywords for detecting image generation requests.
- * Supports Turkish, Persian (Farsi), and English.
+ * =====================================================
+ * THIS FILE IS DEPRECATED!
+ * =====================================================
  * 
+ * We've migrated to OpenAI Function Calling which is much smarter:
+ * - AI decides automatically if user wants an image
+ * - Works for ALL languages without keyword lists
+ * - No false positives from keyword matching
+ * - "kedi çiz" = "draw a cat" = "یه گربه بکش" - AI understands all!
+ * 
+ * Instead of keyword detection, use:
+ * - openai.chatWithFunctionCalling() in OpenAIAdapter
+ * - AI will return type: 'function_call' when image is needed
+ * 
+ * This file is kept only for backwards compatibility.
+ * Will be removed in a future version.
+ * 
+ * @deprecated Use Function Calling (openai.chatWithFunctionCalling) instead
  * @module chat/constants/image-keywords
- * @description Single Responsibility: Only contains image detection keywords
  */
 
 // ==================== TÜRKÇE ====================

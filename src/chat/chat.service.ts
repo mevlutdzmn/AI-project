@@ -24,7 +24,7 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../database/schema';
 import { sessions, messages } from '../database/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
-import { OpenAIAdapter, ChatMessage } from '../ai/adapters/openai.adapter';
+import { OpenAIAdapter, ChatMessage, FunctionCallResult } from '../ai/adapters/openai.adapter';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { MemoryService } from '../memory/memory.service';
@@ -376,45 +376,29 @@ export class ChatService {
 
     // Handle explicit image mode (when user selects image mode from UI)
     if (mode === 'image') {
+      // Detect format from prompt - default to jpg unless PNG explicitly requested
+      const explicitFormat = messageText?.toLowerCase().includes('png') ? 'png' : 'jpg';
       const imageResponse = await this.imageService.handleImageRequest(
         sessionId,
         messageText || 'Generate an image',
         model,
         false,
+        undefined,
+        explicitFormat,
       );
       return { response: imageResponse, userMessageId: userMsg.id };
     }
 
-    // ✅ ChatGPT tarzı: Keyword ile görsel isteği algıla
-    // "kedi çiz", "resim yap" gibi isteklerde otomatik görsel moduna geç
-    // Bu, mode === 'chat' iken bile görsel oluşturmayı sağlar
-    if (this.imageService.isImageRequest(aiContent)) {
-      const imageResponse = await this.imageService.handleImageRequest(
-        sessionId,
-        messageText || 'Generate an image',
-        model,
-        false,
-      );
-      return { response: imageResponse, userMessageId: userMsg.id };
-    }
-
-    // ✅ Multi-turn image editing: "insan binsin", "daha büyük olsun" gibi kısa edit istekleri
-    // Önceki görsel varsa, edit olarak işle
-    if (this.imageService.isImageEditFollowUp(aiContent)) {
-      const previousImageContext = await this.imageService.findPreviousImageContext(sessionId);
-      if (previousImageContext) {
-        const imageResponse = await this.imageService.handleImageRequest(
-          sessionId,
-          messageText || 'Edit the image',
-          model,
-          true, // isEditRequest = true
-          previousImageContext,
-        );
-        return { response: imageResponse, userMessageId: userMsg.id };
-      }
-    }
-
-    // Normal chat
+    // ============================================
+    // ✅ ChatGPT-style Function Calling
+    // Let AI decide if this is an image request - no keyword detection!
+    // Works for ALL languages: "kedi çiz" = "draw a cat" = "یه گربه بکش"
+    // ============================================
+    
+    // Check if there's a recent image in conversation (for edit context)
+    const hasRecentImage = await this.imageService.hasRecentImageInSession(sessionId);
+    
+    // Get conversation history
     const history = await this.getRecentMessages(sessionId);
     const chatMessages: ChatMessage[] = history.map((msg) => {
       let content: any = msg.content;
@@ -430,17 +414,77 @@ export class ChatService {
       };
     });
 
-    const { content: aiResponse, usage } = await this.openai.chat(chatMessages, model, undefined, sessionId);
+    // ✅ Use Function Calling - AI decides if it's an image request
+    const functionResult = await this.openai.chatWithFunctionCalling(
+      chatMessages,
+      model,
+      hasRecentImage,
+      sessionId,
+    );
 
-    if (usage) {
+    // Handle function call (image generation/edit)
+    if (functionResult.type === 'function_call') {
+      const { functionName, functionArgs } = functionResult;
+      this.logger.log(`[SendMessage] AI called function: ${functionName}, format: ${functionArgs?.format || 'jpg'}`);
+
+      if (functionName === 'generate_image' || functionName === 'edit_image') {
+        // For GPT-5.2, image data is already in functionArgs
+        if (functionArgs?.imageBase64) {
+          // Detect PNG from user's original message as fallback
+          const userWantsPng = messageText?.toLowerCase().includes('png');
+          const detectedFormat = userWantsPng ? 'png' : (functionArgs?.format || 'jpg');
+          
+          // GPT-5.2 native image generation - save and return
+          const imageResponse = await this.imageService.handleFunctionCallResult(
+            sessionId,
+            {
+              ...functionArgs,
+              format: detectedFormat,
+            } as {
+              imageBase64: string;
+              responseId: string;
+              imageCallId: string;
+              revisedPrompt?: string;
+              format?: 'jpg' | 'png';
+            },
+            model,
+          );
+          return { response: imageResponse, userMessageId: userMsg.id };
+        }
+
+        // For GPT-4o, we need to call image generation separately
+        const prompt = functionArgs?.prompt || functionArgs?.modification || messageText || '';
+        // Detect PNG from user's original message as fallback (AI may not always set format)
+        const userWantsPngGPT4 = messageText?.toLowerCase().includes('png');
+        const formatGPT4 = userWantsPngGPT4 ? 'png' : (functionArgs?.format || 'jpg');
+        const isEdit = functionName === 'edit_image';
+        const previousContext = isEdit ? await this.imageService.findPreviousImageContext(sessionId) : null;
+
+        const imageResponse = await this.imageService.handleImageRequest(
+          sessionId,
+          prompt,
+          model,
+          isEdit,
+          previousContext,
+          formatGPT4, // Pass format to handleImageRequest
+        );
+        return { response: imageResponse, userMessageId: userMsg.id };
+      }
+    }
+
+    // Log usage if available
+    if (functionResult.usage) {
       await this.usageService.logUsage(
         userId,
         model,
-        usage.promptTokens,
-        usage.completionTokens,
+        functionResult.usage.promptTokens,
+        functionResult.usage.completionTokens,
         sessionId,
       );
     }
+
+    // AI responded with text (not an image request)
+    const aiResponse = functionResult.content || '';
 
     const [assistantMsg] = await this.db
       .insert(messages)
@@ -514,6 +558,8 @@ export class ChatService {
 
     // Handle explicit image mode (when user selects image mode from UI)
     if (mode === 'image') {
+      // Detect format from prompt - default to jpg unless PNG explicitly requested
+      const explicitFormat = messageText?.toLowerCase().includes('png') ? 'png' : 'jpg';
       const previousImageContext = await this.imageService.findPreviousImageContext(sessionId);
       const imageResponse = await this.imageService.handleImageRequest(
         sessionId,
@@ -521,39 +567,10 @@ export class ChatService {
         model,
         false,
         previousImageContext,
+        explicitFormat,
       );
       onChunk(imageResponse);
       return { sessionId, userMessageId: userMsg.id };
-    }
-
-    // ✅ ChatGPT tarzı: Keyword ile görsel isteği algıla
-    // "kedi çiz", "resim yap" gibi isteklerde otomatik görsel moduna geç
-    if (this.imageService.isImageRequest(aiContent)) {
-      const imageResponse = await this.imageService.handleImageRequest(
-        sessionId,
-        messageText || 'Generate an image',
-        model,
-        false,
-      );
-      onChunk(imageResponse);
-      return { sessionId, userMessageId: userMsg.id };
-    }
-
-    // ✅ Multi-turn image editing: "insan binsin", "daha büyük olsun" gibi kısa edit istekleri
-    // Önceki görsel varsa, edit olarak işle
-    if (this.imageService.isImageEditFollowUp(aiContent)) {
-      const previousImageContext = await this.imageService.findPreviousImageContext(sessionId);
-      if (previousImageContext) {
-        const imageResponse = await this.imageService.handleImageRequest(
-          sessionId,
-          messageText || 'Edit the image',
-          model,
-          true, // isEditRequest = true
-          previousImageContext,
-        );
-        onChunk(imageResponse);
-        return { sessionId, userMessageId: userMsg.id };
-      }
     }
 
     // Handle research mode
@@ -607,7 +624,16 @@ export class ChatService {
       };
     }
 
-    // Normal chat mode
+    // ============================================
+    // ✅ ChatGPT-style Function Calling (Streaming)
+    // Let AI decide if this is an image request - no keyword detection!
+    // Works for ALL languages: "kedi çiz" = "draw a cat" = "یه گربه بکش"
+    // ============================================
+    
+    // Check if there's a recent image in conversation (for edit context)
+    const hasRecentImage = await this.imageService.hasRecentImageInSession(sessionId);
+    
+    // Get conversation history
     const history = await this.getRecentMessages(sessionId);
     const chatMessages: ChatMessage[] = history.map((msg) => {
       let content: any = msg.content;
@@ -623,17 +649,74 @@ export class ChatService {
       };
     });
 
-    let fullResponse = '';
-
-    await this.openai.streamChat(
+    // ✅ Use Function Calling - AI decides if it's an image request
+    const functionResult = await this.openai.chatWithFunctionCalling(
       chatMessages,
-      (chunk) => {
-        fullResponse += chunk;
-        onChunk(chunk);
-      },
       model,
-      sessionId, // ✅ SECURITY: Pass sessionId for user-scoped context
+      hasRecentImage,
+      sessionId,
     );
+
+    // Handle function call (image generation/edit)
+    if (functionResult.type === 'function_call') {
+      const { functionName, functionArgs } = functionResult;
+      // Detect PNG from user's original message as fallback (AI may not always set format)
+      const userWantsPng = messageText?.toLowerCase().includes('png');
+      const detectedFormat = userWantsPng ? 'png' : (functionArgs?.format || 'jpg');
+      this.logger.log(`[SendMessageStream] AI called function: ${functionName}, userWantsPng: ${userWantsPng}, format: ${detectedFormat}`);
+
+      if (functionName === 'generate_image' || functionName === 'edit_image') {
+        // For GPT-5.2, image data is already in functionArgs
+        if (functionArgs?.imageBase64) {
+          // GPT-5.2 native image generation - save and return
+          const imageResponse = await this.imageService.handleFunctionCallResult(
+            sessionId,
+            {
+              ...functionArgs,
+              format: detectedFormat,
+            } as {
+              imageBase64: string;
+              responseId: string;
+              imageCallId: string;
+              revisedPrompt?: string;
+              format?: 'jpg' | 'png';
+            },
+            model,
+          );
+          onChunk(imageResponse);
+          return { sessionId, userMessageId: userMsg.id };
+        }
+
+        // For GPT-4o, we need to call image generation separately
+        const prompt = functionArgs?.prompt || functionArgs?.modification || messageText || '';
+        const isEdit = functionName === 'edit_image';
+        const previousContext = isEdit ? await this.imageService.findPreviousImageContext(sessionId) : null;
+
+        const imageResponse = await this.imageService.handleImageRequest(
+          sessionId,
+          prompt,
+          model,
+          isEdit,
+          previousContext,
+          detectedFormat, // Pass format to handleImageRequest
+        );
+        onChunk(imageResponse);
+        return { sessionId, userMessageId: userMsg.id };
+      }
+    }
+
+    // AI responded with text - stream it to the client
+    const fullResponse = functionResult.content || '';
+    
+    // Simulate streaming for function calling responses
+    // (Function calling doesn't support true streaming, so we word-by-word stream)
+    const words = fullResponse.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i] + (i < words.length - 1 ? ' ' : '');
+      onChunk(word);
+      // Small delay for natural typing effect
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
 
     const [assistantMsg] = await this.db
       .insert(messages)

@@ -45,11 +45,124 @@ export class ChatImageService {
     private usersService: UsersService,
   ) {}
 
+  // ============================================
+  // ✅ NEW: Function Calling Handler
+  // ============================================
+
   /**
+   * ✅ Handle image data from Function Calling result (GPT-5.2)
+   * When AI decides to generate an image, the base64 data comes here
+   * 
+   * @param sessionId - Session ID
+   * @param functionArgs - { imageBase64, responseId, imageCallId, revisedPrompt, format }
+   * @param model - Model used
+   * @returns Image response string with markdown
+   */
+  async handleFunctionCallResult(
+    sessionId: string,
+    functionArgs: {
+      imageBase64: string;
+      responseId: string;
+      imageCallId: string;
+      revisedPrompt?: string;
+      format?: 'jpg' | 'png';
+    },
+    model?: string,
+  ): Promise<string> {
+    try {
+      // Determine format - default to jpg
+      const imageFormat = functionArgs.format || 'jpg';
+      this.logger.log(`[FunctionCallResult] Processing image from AI decision, format: ${imageFormat}`);
+
+      // Validate user limits
+      const [session] = await this.db
+        .select({ userId: sessions.userId })
+        .from(sessions)
+        .where(eq(sessions.id, sessionId))
+        .limit(1);
+
+      if (!session) {
+        throw new Error('Session not found');
+      }
+
+      const user = await this.usersService.findById(session.userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const isAdmin = user.isAdmin;
+      const isPremium = user.isPremium || false;
+      const subscriptionEnd = user.subscriptionExpiresAt
+        ? new Date(user.subscriptionExpiresAt)
+        : null;
+      const imageCredits = user.imageCredits || 0;
+      const now = new Date();
+      const hasActivePremium = isPremium && (!subscriptionEnd || subscriptionEnd > now);
+
+      // Check image limit for free users
+      if (!isAdmin && !hasActivePremium && imageCredits >= 1) {
+        const limitMsg =
+          '🚫 **Görsel oluşturma limitiniz doldu!**\n\n' +
+          'Ücretsiz hesaplar yalnızca **1 görsel** oluşturabilir.\n\n' +
+          '✨ Sınırsız görsel için **Premium**\'a yükseltin!';
+
+        await this.saveAssistantMessage(sessionId, limitMsg, model);
+        return limitMsg;
+      }
+
+      // Save image to disk with correct format
+      const imageFileName = `img_${randomUUID()}.${imageFormat}`;
+      const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+      const imagePath = path.join(uploadsDir, imageFileName);
+      
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const imageBuffer = Buffer.from(functionArgs.imageBase64, 'base64');
+      fs.writeFileSync(imagePath, imageBuffer);
+      
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+      const imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+      const imageResponse = `![Generated Image](${imageUrl})`;
+      
+      this.logger.log(`[FunctionCallResult] ✅ Image saved as ${imageFormat.toUpperCase()}: ${imagePath}`);
+
+      // Increment image credits for non-admin users
+      if (!isAdmin) {
+        await this.usersService.incrementImageCredits(session.userId);
+      }
+
+      // Save with imageContext for multi-turn edits
+      await this.saveAssistantMessage(sessionId, imageResponse, model, {
+        responseId: functionArgs.responseId,
+        imageCallId: functionArgs.imageCallId,
+        revisedPrompt: functionArgs.revisedPrompt || '',
+      });
+
+      return imageResponse;
+    } catch (error: any) {
+      this.logger.error('[FunctionCallResult] Error:', error);
+      const errorMsg = this.getImageErrorMessage(error);
+      await this.saveAssistantMessage(sessionId, errorMsg, model);
+      return errorMsg;
+    }
+  }
+
+  // ============================================
+  // ⚠️ DEPRECATED: Keyword-based detection
+  // These methods are kept for backwards compatibility
+  // Use Function Calling (chatWithFunctionCalling) instead!
+  // ============================================
+
+  /**
+   * @deprecated Use Function Calling instead - AI decides automatically!
    * Check if a message is requesting image generation
    * Excludes uploaded images (those go to GPT Vision)
    */
   isImageRequest(message: any): boolean {
+    this.logger.warn('[DEPRECATED] isImageRequest called - use Function Calling instead');
+    
     // If message contains an uploaded image, this is NOT an image generation request
     // It's an image ANALYSIS request - should go to GPT Vision, not DALL-E
     if (Array.isArray(message)) {
@@ -75,6 +188,7 @@ export class ChatImageService {
   }
 
   /**
+   * @deprecated Use Function Calling instead - AI decides automatically!
    * Check if this is a follow-up image editing request
    * Returns true if the message contains image editing keywords OR
    * if it looks like a short modification command
@@ -181,6 +295,7 @@ export class ChatImageService {
     model?: string,
     isEditRequest: boolean = false,
     previousContext?: ImageContext | null,
+    format: 'jpg' | 'png' = 'jpg', // Default to JPG unless PNG explicitly requested
   ): Promise<string> {
     try {
       const [session] = await this.db
@@ -253,7 +368,7 @@ export class ChatImageService {
       }
 
       // ✅ Save image to disk instead of inline base64 (prevents site freezing)
-      const imageFileName = `img_${randomUUID()}.png`;
+      const imageFileName = `img_${randomUUID()}.${format}`; // Use format (jpg/png)
       const uploadsDir = process.env.UPLOAD_DIR || './uploads';
       const imagePath = path.join(uploadsDir, imageFileName);
       

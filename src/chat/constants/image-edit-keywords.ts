@@ -1,12 +1,25 @@
 /**
- * Image Edit Keywords
+ * ⚠️ DEPRECATED - Image Edit Keywords
  * 
- * Multi-language keywords for detecting image editing/modification requests.
- * These keywords are used for multi-turn image editing follow-ups.
- * Supports Turkish, Persian (Farsi), and English.
+ * =====================================================
+ * THIS FILE IS DEPRECATED!
+ * =====================================================
  * 
+ * We've migrated to OpenAI Function Calling which is much smarter:
+ * - AI decides automatically if user wants to edit an image
+ * - Works for ALL languages without keyword lists
+ * - Context-aware: knows when there's a previous image to edit
+ * - "daha büyük olsun" = "make it bigger" = "بزرگترش کن" - AI understands all!
+ * 
+ * Instead of keyword detection, use:
+ * - openai.chatWithFunctionCalling() with hasRecentImage=true
+ * - AI will call edit_image function when edit is needed
+ * 
+ * This file is kept only for backwards compatibility.
+ * Will be removed in a future version.
+ * 
+ * @deprecated Use Function Calling (openai.chatWithFunctionCalling) instead
  * @module chat/constants/image-edit-keywords
- * @description Single Responsibility: Only contains image edit detection keywords
  */
 
 // ==================== TÜRKÇE ====================
