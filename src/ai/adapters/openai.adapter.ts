@@ -1293,38 +1293,50 @@ If the user wants to modify it, generate a new version with the requested change
     const enhancedPrompt = this.enhancePromptForImageGeneration(prompt);
     this.logger.log(`[Image Generation] Original: "${prompt}"`);
     this.logger.log(`[Image Generation] Enhanced: "${enhancedPrompt}"`);
+    this.logger.log(`[Image Generation] Model: ${this.getBaseModel(model)}`);
 
-    const response = await (this.client as any).responses.create({
-      model: this.getBaseModel(model),
-      input: `Generate an image: ${enhancedPrompt}`,
-      tools: [{ type: 'image_generation', quality: 'high', background: 'auto' }],
-      tool_choice: 'required', // ✅ Force image generation, don't ask questions
-      store: true, // Required for multi-turn
-    });
+    try {
+      const response = await (this.client as any).responses.create({
+        model: this.getBaseModel(model),
+        input: `Generate an image: ${enhancedPrompt}`,
+        tools: [{ type: 'image_generation', quality: 'high', background: 'auto' }],
+        tool_choice: 'required', // ✅ Force image generation, don't ask questions
+        store: true, // Required for multi-turn
+      });
 
-    // Find image_generation_call in output
-    const imageCall = (response.output || []).find(
-      (o: any) => o.type === 'image_generation_call',
-    );
+      // Find image_generation_call in output
+      const imageCall = (response.output || []).find(
+        (o: any) => o.type === 'image_generation_call',
+      );
 
-    if (!imageCall || !imageCall.result) {
-      this.logger.error('[Image Generation] No image in response:', response);
-      throw new Error('Image generation failed - no image returned');
+      if (!imageCall || !imageCall.result) {
+        this.logger.error('[Image Generation] No image in response:', JSON.stringify(response, null, 2));
+        throw new Error('Image generation failed - no image returned');
+      }
+
+      // Store context for this session
+      const ctx = this.getContext(sessionId);
+      ctx.responseId = response.id;
+      ctx.imageGenerationCallId = imageCall.id;
+
+      this.logger.log(`[Image Generation] Success - responseId: ${response.id}, callId: ${imageCall.id}`);
+
+      return {
+        imageBase64: imageCall.result,
+        responseId: response.id,
+        imageCallId: imageCall.id,
+        revisedPrompt: imageCall.revised_prompt || prompt,
+      };
+    } catch (error: any) {
+      this.logger.error('[Image Generation] OpenAI API Error:', error?.message || error);
+      this.logger.error('[Image Generation] Error details:', JSON.stringify({
+        status: error?.status,
+        code: error?.code,
+        type: error?.type,
+        message: error?.message,
+      }, null, 2));
+      throw error;
     }
-
-    // Store context for this session
-    const ctx = this.getContext(sessionId);
-    ctx.responseId = response.id;
-    ctx.imageGenerationCallId = imageCall.id;
-
-    this.logger.log(`[Image Generation] Success - responseId: ${response.id}, callId: ${imageCall.id}`);
-
-    return {
-      imageBase64: imageCall.result,
-      responseId: response.id,
-      imageCallId: imageCall.id,
-      revisedPrompt: imageCall.revised_prompt || prompt,
-    };
   }
 
   /**

@@ -7,6 +7,7 @@ export const validationSchema = Joi.object({
     .default('development'),
   PORT: Joi.number().default(4000),
   FRONTEND_URL: Joi.string().uri().required(),
+  BACKEND_URL: Joi.string().uri().default('http://localhost:4000'),
 
   // Database
   DATABASE_URL: Joi.string().uri().required(),

@@ -12,7 +12,7 @@ import { eq, and, gt } from 'drizzle-orm';
 import * as crypto from 'crypto';
 
 const VERIFICATION_WINDOW_MINUTES = 15;
-const REFRESH_TOKEN_EXPIRY_DAYS = 30;
+const REFRESH_TOKEN_EXPIRY_DAYS = 90;
 
 @Injectable()
 export class AuthService {

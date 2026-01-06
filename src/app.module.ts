@@ -24,6 +24,7 @@ import { UsageModule } from './usage/usage.module';
 import { AudioModule } from './audio/audio.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { HealthModule } from './health/health.module';
+import { StorageModule } from './storage/storage.module';
 import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
@@ -61,6 +62,7 @@ import { validationSchema } from './config/env.validation';
     ]),
     DatabaseModule,
     CacheModule, // ✅ Redis/Memory cache support
+    StorageModule, // ✅ Supabase Storage for Vercel deployment
     AuthModule,
     UsersModule,
     NotificationsModule,

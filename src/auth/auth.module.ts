@@ -18,9 +18,9 @@ import { DatabaseModule } from '../database/database.module';
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        // ✅ Access tokens expire in 15 minutes for security
-        // Refresh tokens (stored in DB) last 30 days
-        signOptions: { expiresIn: '15m' },
+        // ✅ Access tokens expire in 7 days (ChatGPT-style long sessions)
+        // Refresh tokens (stored in DB) last 90 days
+        signOptions: { expiresIn: '7d' },
       }),
       inject: [ConfigService],
     }),

@@ -23,6 +23,7 @@ import { messages, sessions } from '../../database/schema';
 import { eq, desc } from 'drizzle-orm';
 import { OpenAIAdapter } from '../../ai/adapters/openai.adapter';
 import { UsersService } from '../../users/users.service';
+import { StorageService } from '../../storage/storage.service';
 import {
   containsImageKeyword,
   containsImageEditKeyword,
@@ -41,8 +42,9 @@ export class ChatImageService {
 
   constructor(
     @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
-    private openai: OpenAIAdapter, // ✅ CHANGED: OpenAI instead of DALL-E
+    private openai: OpenAIAdapter,
     private usersService: UsersService,
+    private storageService: StorageService, // ✅ Supabase Storage for Vercel
   ) {}
 
   // ============================================
@@ -110,23 +112,41 @@ export class ChatImageService {
         return limitMsg;
       }
 
-      // Save image to disk with correct format
+      // Save image - use Supabase Storage for Vercel, fallback to local
       const imageFileName = `img_${randomUUID()}.${imageFormat}`;
-      const uploadsDir = process.env.UPLOAD_DIR || './uploads';
-      const imagePath = path.join(uploadsDir, imageFileName);
-      
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+      const contentType = imageFormat === 'png' ? 'image/png' : 'image/jpeg';
+      let imageUrl: string;
+
+      if (this.storageService.isAvailable()) {
+        // ✅ Vercel: Use Supabase Storage
+        this.logger.log('[FunctionCallResult] Using Supabase Storage...');
+        imageUrl = await this.storageService.uploadImage(
+          functionArgs.imageBase64,
+          imageFileName,
+          contentType,
+        );
+        this.logger.log(`[FunctionCallResult] ✅ Uploaded to Supabase: ${imageUrl}`);
+      } else {
+        // Fallback: Local filesystem (development only)
+        this.logger.log('[FunctionCallResult] Using local filesystem...');
+        const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+        const imagePath = path.join(uploadsDir, imageFileName);
+        
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        const imageBuffer = Buffer.from(functionArgs.imageBase64, 'base64');
+        fs.writeFileSync(imagePath, imageBuffer);
+        
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+        imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+        this.logger.log(`[FunctionCallResult] ✅ Saved locally: ${imagePath}`);
       }
-      
-      const imageBuffer = Buffer.from(functionArgs.imageBase64, 'base64');
-      fs.writeFileSync(imagePath, imageBuffer);
-      
-      const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
-      const imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+
       const imageResponse = `![Generated Image](${imageUrl})`;
       
-      this.logger.log(`[FunctionCallResult] ✅ Image saved as ${imageFormat.toUpperCase()}: ${imagePath}`);
+      this.logger.log(`[FunctionCallResult] ✅ Image saved as ${imageFormat.toUpperCase()}: ${imageUrl}`);
 
       // Increment image credits for non-admin users
       if (!isAdmin) {
@@ -367,26 +387,41 @@ export class ChatImageService {
         result = await this.openai.generateImage(finalPrompt, sessionId, model || 'gpt-5.2');
       }
 
-      // ✅ Save image to disk instead of inline base64 (prevents site freezing)
-      const imageFileName = `img_${randomUUID()}.${format}`; // Use format (jpg/png)
-      const uploadsDir = process.env.UPLOAD_DIR || './uploads';
-      const imagePath = path.join(uploadsDir, imageFileName);
-      
-      // Ensure uploads directory exists
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+      // ✅ Save image - use Supabase Storage for Vercel, fallback to local
+      const imageFileName = `img_${randomUUID()}.${format}`;
+      const contentType = format === 'png' ? 'image/png' : 'image/jpeg';
+      let imageUrl: string;
+
+      if (this.storageService.isAvailable()) {
+        // ✅ Vercel: Use Supabase Storage
+        this.logger.log('[Image] Using Supabase Storage...');
+        imageUrl = await this.storageService.uploadImage(
+          result.imageBase64,
+          imageFileName,
+          contentType,
+        );
+        this.logger.log(`[Image] ✅ Uploaded to Supabase: ${imageUrl}`);
+      } else {
+        // Fallback: Local filesystem (development only)
+        this.logger.log('[Image] Using local filesystem...');
+        const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+        const imagePath = path.join(uploadsDir, imageFileName);
+        
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        const imageBuffer = Buffer.from(result.imageBase64, 'base64');
+        fs.writeFileSync(imagePath, imageBuffer);
+        
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+        imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+        this.logger.log(`[Image] ✅ Saved locally: ${imagePath}`);
       }
-      
-      // Save base64 to file
-      const imageBuffer = Buffer.from(result.imageBase64, 'base64');
-      fs.writeFileSync(imagePath, imageBuffer);
-      
-      const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
-      const imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+
       const imageResponse = `![Generated Image](${imageUrl})`;
       
       this.logger.log(`[Image] ✅ Generation successful - responseId: ${result.responseId}`);
-      this.logger.log(`[Image] ✅ Saved to: ${imagePath}, URL: ${imageUrl}`);
 
       // Increment image credits for non-admin users
       if (!isAdmin) {
@@ -408,8 +443,20 @@ export class ChatImageService {
     } catch (error: unknown) {
       this.logger.error('[Image] ❌ CATCH BLOCK HIT!');
       this.logger.error('[Image] Error type:', typeof error);
+      this.logger.error('[Image] Error name:', error instanceof Error ? error.name : 'Unknown');
       this.logger.error('[Image] Error message:', error instanceof Error ? error.message : 'Unknown');
-      this.logger.error('[Image] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error as object), 2));
+      if (error instanceof Error && error.stack) {
+        this.logger.error('[Image] Stack trace:', error.stack);
+      }
+      // Log additional OpenAI error properties
+      const err = error as any;
+      if (err?.status || err?.code || err?.type) {
+        this.logger.error('[Image] OpenAI Error details:', JSON.stringify({
+          status: err.status,
+          code: err.code,
+          type: err.type,
+        }, null, 2));
+      }
       const errorMsg = this.getImageErrorMessage(error);
       await this.saveAssistantMessage(sessionId, errorMsg, model);
       return errorMsg;
@@ -447,23 +494,40 @@ export class ChatImageService {
 
       // Check if GPT decided to generate an image
       if (result.hasImage && result.imageBase64) {
-        // Save image to disk
+        // ✅ Save image - use Supabase Storage for Vercel, fallback to local
         const imageFileName = `img_${randomUUID()}.png`;
-        const uploadsDir = process.env.UPLOAD_DIR || './uploads';
-        const imagePath = path.join(uploadsDir, imageFileName);
-        
-        if (!fs.existsSync(uploadsDir)) {
-          fs.mkdirSync(uploadsDir, { recursive: true });
+        let imageUrl: string;
+
+        if (this.storageService.isAvailable()) {
+          // ✅ Vercel: Use Supabase Storage
+          this.logger.log('[SmartImage] Using Supabase Storage...');
+          imageUrl = await this.storageService.uploadImage(
+            result.imageBase64,
+            imageFileName,
+            'image/png',
+          );
+          this.logger.log(`[SmartImage] ✅ Uploaded to Supabase: ${imageUrl}`);
+        } else {
+          // Fallback: Local filesystem (development only)
+          this.logger.log('[SmartImage] Using local filesystem...');
+          const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+          const imagePath = path.join(uploadsDir, imageFileName);
+          
+          if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+          }
+          
+          const imageBuffer = Buffer.from(result.imageBase64, 'base64');
+          fs.writeFileSync(imagePath, imageBuffer);
+          
+          const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+          imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+          this.logger.log(`[SmartImage] ✅ Saved locally: ${imagePath}`);
         }
-        
-        const imageBuffer = Buffer.from(result.imageBase64, 'base64');
-        fs.writeFileSync(imagePath, imageBuffer);
-        
-        const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
-        const imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+
         const imageResponse = `![Generated Image](${imageUrl})`;
         
-        this.logger.log(`[SmartImage] ✅ GPT generated image - saved to: ${imagePath}`);
+        this.logger.log(`[SmartImage] ✅ GPT generated image`);
         
         // Save with new context
         await this.saveAssistantMessage(sessionId, imageResponse, model, {
@@ -514,6 +578,10 @@ export class ChatImageService {
    */
   private getImageErrorMessage(error: any): string {
     const msg = error?.message || '';
+    const code = error?.code || error?.status || '';
+    
+    // Log the error for debugging
+    this.logger.warn(`[ImageError] Processing error - message: "${msg}", code: "${code}"`);
     
     if (msg.includes('safety') || msg.includes('content_policy')) {
       return (
@@ -524,8 +592,28 @@ export class ChatImageService {
       );
     }
 
-    if (msg.includes('rate') || msg.includes('429')) {
+    if (msg.includes('rate') || msg.includes('429') || code === 429) {
       return '⏳ Çok fazla istek gönderildi. Lütfen birkaç dakika bekleyin.';
+    }
+
+    if (msg.includes('quota') || msg.includes('insufficient_quota') || msg.includes('billing')) {
+      return '❌ API kotası aşıldı. Lütfen yöneticiyle iletişime geçin.';
+    }
+
+    if (msg.includes('invalid_api_key') || msg.includes('Incorrect API key') || code === 401) {
+      return '❌ API yapılandırma hatası. Lütfen yöneticiyle iletişime geçin.';
+    }
+
+    if (msg.includes('model') || msg.includes('does not exist')) {
+      return '❌ Model bulunamadı. Lütfen farklı bir model deneyin.';
+    }
+
+    if (msg.includes('timeout') || msg.includes('ETIMEDOUT') || msg.includes('ECONNREFUSED')) {
+      return '❌ Bağlantı zaman aşımı. Lütfen tekrar deneyin.';
+    }
+
+    if (msg.includes('OpenAI client not initialized')) {
+      return '❌ AI servisi başlatılamadı. Lütfen yöneticiyle iletişime geçin.';
     }
 
     return '❌ Görsel oluşturma başarısız oldu. Lütfen tekrar deneyin.';
