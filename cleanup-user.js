@@ -1,7 +1,14 @@
 const postgres = require('postgres');
 
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL environment variable is required');
+  process.exit(1);
+}
+
 (async () => {
-  const sql = postgres('postgresql://postgres.tbwqaradnfivziwzwcle:FqNeD7SIzasxBB4p@aws-1-eu-north-1.pooler.supabase.com:6543/postgres');
+  const sql = postgres(DATABASE_URL);
   
   const result1 = await sql`DELETE FROM users WHERE email = 'mdizman124@gmail.com'`;
   const result2 = await sql`DELETE FROM pending_users WHERE email = 'mdizman124@gmail.com'`;

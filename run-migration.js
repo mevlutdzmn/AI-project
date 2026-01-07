@@ -3,7 +3,12 @@ const { drizzle } = require('drizzle-orm/postgres-js');
 const postgres = require('postgres');
 const fs = require('fs');
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.tbwqaradnfivziwzwcle:FqNeD7SIzasxBB4p@aws-1-eu-north-1.pooler.supabase.com:6543/postgres';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL environment variable is required');
+  process.exit(1);
+}
 
 async function runMigration() {
   const sql = postgres(DATABASE_URL, { max: 1 });
