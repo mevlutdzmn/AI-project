@@ -610,6 +610,8 @@ export class ChatService {
       const isGeminiModel = model?.startsWith('gemini') || model?.startsWith('imagen');
       
       let imageResponse: string;
+      let assistantMessageId: number | undefined;
+      
       if (isGeminiModel) {
         this.logger.log(`[Image Mode Stream] Using Gemini image generation with model: ${model}`);
         const geminiResult = await this.imageService.handleGeminiImageRequest(
@@ -618,6 +620,7 @@ export class ChatService {
           model,
         );
         imageResponse = geminiResult.content;
+        assistantMessageId = geminiResult.assistantMessageId;
       } else {
         this.logger.log(`[Image Mode Stream] Using OpenAI image generation with model: ${model}`);
         const previousImageContext = await this.imageService.findPreviousImageContext(sessionId);
@@ -631,7 +634,7 @@ export class ChatService {
         );
       }
       onChunk(imageResponse);
-      return { sessionId, userMessageId: userMsg.id };
+      return { sessionId, userMessageId: userMsg.id, assistantMessageId };
     }
 
     // Handle research mode
