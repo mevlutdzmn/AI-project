@@ -432,12 +432,14 @@ export class ChatController {
         return res.send(buffer);
       }
       
-      // ✅ External URLs (OpenAI DALL-E)
+      // ✅ External URLs (OpenAI DALL-E, Supabase Storage)
       const allowedDomains = [
         'oaidalleapiprodscus.blob.core.windows.net',
         'dalleprodsec.blob.core.windows.net',
         'openai.com',
         'api.openai.com',
+        'supabase.co',           // ✅ Supabase Storage
+        'supabase.in',           // ✅ Supabase alternate domain
       ];
 
       if (!allowedDomains.some((domain) => urlObj.hostname.includes(domain))) {
