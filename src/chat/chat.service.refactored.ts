@@ -47,7 +47,7 @@ export class ChatService {
     @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
     private openai: OpenAIAdapter,
     private usersService: UsersService,
-    private configService: ConfigService,
+    private _configService: ConfigService,
     private memoryService: MemoryService,
     private usageService: UsageService,
     // Specialized services (SOLID - Dependency Injection)

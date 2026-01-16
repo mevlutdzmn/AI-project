@@ -247,7 +247,67 @@ export class OpenAIAdapter {
     return `${backendUrl}/uploads/${filename}`;
   }
 
+  /**
+   * Convert localhost URLs to base64 data URLs
+   * OpenAI cannot access localhost URLs, so we need to convert them
+   */
+  private async convertImageUrlToBase64(url: string): Promise<string> {
+    // Already base64, return as-is
+    if (url.startsWith('data:image/')) {
+      return url;
+    }
+    
+    // Localhost URL - fetch and convert to base64
+    if (url.includes('localhost') || url.includes('127.0.0.1')) {
+      try {
+        this.logger.log(`[OpenAI] Converting localhost URL to base64: ${url.substring(0, 50)}...`);
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
+        const contentType = response.headers.get('content-type') || 'image/png';
+        return `data:${contentType};base64,${base64}`;
+      } catch (error) {
+        this.logger.error(`[OpenAI] Failed to fetch localhost image: ${url}`, error);
+        // Return original URL as fallback
+        return url;
+      }
+    }
+    
+    // Public URL - can be used directly by OpenAI
+    return url;
+  }
+
   // ✅ DRY: Single helper function for message conversion (Chat Completions API)
+  // Async to support localhost URL to base64 conversion
+  private async convertToOpenAIMessagesAsync(messages: ChatMessage[]): Promise<OpenAIMessage[]> {
+    const results: OpenAIMessage[] = [];
+    
+    for (const msg of messages) {
+      if (typeof msg.content === 'string') {
+        results.push({ role: msg.role, content: msg.content });
+      } else if (Array.isArray(msg.content)) {
+        const contentParts: OpenAIContentPart[] = [];
+        for (const part of msg.content) {
+          if (part.type === 'text' && part.text) {
+            contentParts.push({ type: 'text', text: part.text });
+          } else if (part.type === 'image_url' && part.image_url) {
+            const convertedUrl = await this.convertImageUrlToBase64(part.image_url.url);
+            contentParts.push({ type: 'image_url', image_url: { url: convertedUrl } });
+          }
+        }
+        results.push({ role: msg.role, content: contentParts });
+      } else {
+        results.push({ role: msg.role, content: String(msg.content) });
+      }
+    }
+    
+    return results;
+  }
+
+  // Sync version for backward compatibility (no URL conversion)
   private convertToOpenAIMessages(messages: ChatMessage[]): OpenAIMessage[] {
     return messages.map((msg) => {
       if (typeof msg.content === 'string') {
@@ -271,7 +331,46 @@ export class OpenAIAdapter {
     }) as OpenAIMessage[];
   }
 
-  // ✅ DRY: Single helper function for Responses API format
+  // ✅ DRY: Async helper for Responses API format with URL conversion
+  private async convertToResponsesAPIFormatAsync(messages: ChatMessage[]): Promise<any[]> {
+    const results: any[] = [];
+    
+    for (const msg of messages) {
+      const role = msg.role === 'system' ? 'developer' : msg.role;
+      
+      if (typeof msg.content === 'string') {
+        results.push({ role, content: msg.content });
+      } else if (Array.isArray(msg.content)) {
+        const contentParts: any[] = [];
+        for (const part of msg.content) {
+          if (part.type === 'text' && part.text) {
+            contentParts.push({ type: 'input_text', text: part.text });
+          } else if (part.type === 'image_url' && part.image_url) {
+            // ✅ FIX: Assistant messages can't have input_image in Responses API
+            // Only user/developer messages can include images
+            if (msg.role === 'assistant') {
+              // For assistant messages with images, add as text description
+              contentParts.push({ 
+                type: 'output_text', 
+                text: '[Previously generated image is visible in this conversation]' 
+              });
+            } else {
+              // For user messages, convert localhost URLs to base64 and include as image
+              const convertedUrl = await this.convertImageUrlToBase64(part.image_url.url);
+              contentParts.push({ type: 'input_image', image_url: convertedUrl });
+            }
+          }
+        }
+        results.push({ role, content: contentParts });
+      } else {
+        results.push({ role, content: String(msg.content) });
+      }
+    }
+    
+    return results;
+  }
+
+  // Sync version for backward compatibility
   private convertToResponsesAPIFormat(messages: ChatMessage[]): any[] {
     return messages.map((msg) => {
       const role = msg.role === 'system' ? 'developer' : msg.role;
@@ -285,6 +384,10 @@ export class OpenAIAdapter {
               return { type: 'input_text', text: part.text };
             }
             if (part.type === 'image_url' && part.image_url) {
+              // ✅ FIX: Assistant messages can't have input_image in Responses API
+              if (msg.role === 'assistant') {
+                return { type: 'output_text', text: '[Previously generated image]' };
+              }
               return { type: 'input_image', image_url: part.image_url.url };
             }
             return null;
@@ -617,8 +720,8 @@ If the user wants to modify it, generate a new version with the requested change
         return;
       }
 
-      // ✅ DRY: Use helper function for message conversion
-      const openAIMessages = this.convertToOpenAIMessages(messages);
+      // ✅ DRY: Use async helper for message conversion (converts localhost URLs to base64)
+      const openAIMessages = await this.convertToOpenAIMessagesAsync(messages);
 
       // System prompt'u başa ekle
       const messagesWithSystem: OpenAIMessage[] = [
@@ -732,8 +835,8 @@ If the user wants to modify it, generate a new version with the requested change
       ...messages,
     ];
 
-    // ✅ DRY: Use helper function for message conversion
-    const inputMessages = this.convertToResponsesAPIFormat(messagesWithSystem);
+    // ✅ DRY: Use async helper for message conversion (converts localhost URLs to base64)
+    const inputMessages = await this.convertToResponsesAPIFormatAsync(messagesWithSystem);
 
     const baseModel = this.getBaseModel(model);
     const effort = this.getReasoningEffort(model);

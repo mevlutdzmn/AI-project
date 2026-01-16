@@ -1,5 +1,4 @@
 import {
-  integer,
   pgTable,
   serial,
   text,

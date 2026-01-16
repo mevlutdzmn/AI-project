@@ -2,7 +2,7 @@
  * Common TypeScript interfaces used across the application
  */
 
-import { Request } from 'express';
+import type { Request } from 'express';
 
 // ===========================================
 // User & Authentication Types
@@ -24,8 +24,11 @@ export interface UserWithoutPassword extends Omit<User, 'password'> {}
 
 export interface JwtPayload {
   sub: number;
+  id: number; // Alias for sub - used in controllers
   email: string;
   isAdmin: boolean;
+  isPremium?: boolean;
+  subscriptionExpiresAt?: Date | null;
   iat?: number;
   exp?: number;
 }

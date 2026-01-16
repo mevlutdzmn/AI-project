@@ -12,14 +12,14 @@ export const multerConfig: MulterModuleOptions = {
   storage: isVercel
     ? memoryStorage() // Use memory storage on Vercel
     : diskStorage({
-        destination: (req, file, cb) => {
+        destination: (_req, _file, cb) => {
           const dest = process.env.UPLOAD_DIR || './uploads';
           if (!fs.existsSync(dest)) {
             fs.mkdirSync(dest, { recursive: true });
           }
           cb(null, dest);
         },
-        filename: (req, file, cb) => {
+        filename: (_req, file, cb) => {
           // ✅ Security: Use crypto.randomBytes instead of Math.random
           const randomName = crypto.randomBytes(16).toString('hex');
           cb(null, `${randomName}${extname(file.originalname)}`);

@@ -14,7 +14,7 @@ import { Request } from 'express';
  */
 @Injectable()
 export class SanitizationInterceptor implements NestInterceptor {
-  private readonly logger = new Logger(SanitizationInterceptor.name);
+  private readonly _logger = new Logger(SanitizationInterceptor.name);
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest<Request>();

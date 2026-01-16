@@ -110,7 +110,7 @@ RULES:
         wasFixed: cleaned !== text,
       };
     } catch (error) {
-      this.logger.error('[cleanupSTTText] Error:', error.message);
+      this.logger.error('[cleanupSTTText] Error:', (error as Error).message);
       return { cleaned: text, original: text, wasFixed: false };
     }
   }
@@ -143,7 +143,7 @@ RULES:
 
       return { response: response || '' };
     } catch (error) {
-      this.logger.error('[quickChatResponse] Error:', error.message);
+      this.logger.error('[quickChatResponse] Error:', (error as Error).message);
       return { response: '' };
     }
   }

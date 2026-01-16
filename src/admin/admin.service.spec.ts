@@ -96,7 +96,7 @@ describe('AdminService', () => {
       ];
 
       jest.spyOn(service, 'getUsers').mockResolvedValue({
-        users: mockUsers.map(({ password, ...u }) => u),
+        users: mockUsers.map(({ password, ...u }) => u) as any,
         total: 2,
         page: 1,
         limit: 10,
@@ -114,7 +114,7 @@ describe('AdminService', () => {
 
     it('should filter users by search term', async () => {
       jest.spyOn(service, 'getUsers').mockResolvedValue({
-        users: [{ id: 1, email: 'admin@test.com', active: true }],
+        users: [{ id: 1, email: 'admin@test.com', active: true }] as any,
         total: 1,
         page: 1,
         limit: 10,

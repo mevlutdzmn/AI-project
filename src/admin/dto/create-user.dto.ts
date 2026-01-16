@@ -13,7 +13,7 @@ export class CreateUserDto {
   @ApiProperty({ example: 'user@example.com', description: 'User email address' })
   @IsEmail({}, { message: 'Invalid email format' })
   @MaxLength(255, { message: 'Email must be at most 255 characters' })
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'SecureP@ss123', description: 'User password' })
   @IsString({ message: 'Password must be a string' })
@@ -22,7 +22,7 @@ export class CreateUserDto {
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
     message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
   })
-  password: string;
+  password!: string;
 
   @ApiPropertyOptional({ example: false, description: 'Is admin user' })
   @IsBoolean({ message: 'isAdmin must be a boolean' })

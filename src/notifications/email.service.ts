@@ -54,18 +54,25 @@ export class EmailService {
   async sendPasswordResetEmail(
     email: string,
     resetLink: string,
+    locale: string = 'fa',
   ): Promise<boolean> {
     if (!this.transporter) {
       this.logger.log(`[DEV] Password reset link for ${email}: ${resetLink}`);
       return false;
     }
 
+    const subjects = {
+      tr: 'Şifre Sıfırlama',
+      en: 'Password Reset',
+      fa: 'بازیابی رمز عبور',
+    };
+
     const emailUser = this.configService.get<string>('EMAIL_USER');
     await this.transporter.sendMail({
       from: `"AI Platform" <${emailUser}>`,
       to: email,
-      subject: 'بازیابی رمز عبور',
-      html: this.getPasswordResetEmailTemplate(resetLink),
+      subject: subjects[locale as keyof typeof subjects] || subjects.en,
+      html: this.getPasswordResetEmailTemplate(resetLink, locale),
     });
     return true;
   }
@@ -182,10 +189,47 @@ export class EmailService {
     `;
   }
 
-  private getPasswordResetEmailTemplate(resetLink: string): string {
+  private getPasswordResetEmailTemplate(resetLink: string, locale: string = 'fa'): string {
+    const isRTL = locale === 'fa';
+    
+    const translations = {
+      tr: {
+        title: 'Şifre Sıfırlama',
+        description: 'Hesabınız için şifre sıfırlama isteği alındı.',
+        instruction: 'Şifrenizi değiştirmek için aşağıdaki butona tıklayın:',
+        button: 'Şifreyi Değiştir',
+        expireNote: 'Bu link <strong>1 saat</strong> geçerlidir.',
+        warning: '<strong>Güvenlik Uyarısı:</strong> Bu isteği siz yapmadıysanız, bu e-postayı dikkate almayın.',
+        footer: 'Sorun yaşarsanız destek ile iletişime geçin.',
+      },
+      en: {
+        title: 'Password Reset',
+        description: 'A password reset request was received for your account.',
+        instruction: 'Click the button below to change your password:',
+        button: 'Change Password',
+        expireNote: 'This link is valid for <strong>1 hour</strong>.',
+        warning: '<strong>Security Warning:</strong> If you did not make this request, please ignore this email.',
+        footer: 'If you encounter any issues, contact support.',
+      },
+      fa: {
+        title: 'بازیابی رمز عبور',
+        description: 'درخواست بازیابی رمز عبور برای حساب شما دریافت شد.',
+        instruction: 'برای تغییر رمز عبور خود، روی دکمه زیر کلیک کنید:',
+        button: 'تغییر رمز عبور',
+        expireNote: 'این لینک تا <strong>۱ ساعت</strong> معتبر است.',
+        warning: '<strong>هشدار امنیتی:</strong> اگر شما این درخواست را نداده‌اید، این ایمیل را نادیده بگیرید.',
+        footer: 'در صورت بروز مشکل، با پشتیبانی تماس بگیرید.',
+      },
+    };
+
+    const t = translations[locale as keyof typeof translations] || translations.en;
+    const dir = isRTL ? 'rtl' : 'ltr';
+    const borderSide = isRTL ? 'border-right' : 'border-left';
+    const textAlign = isRTL ? 'right' : 'left';
+
     return `
       <!DOCTYPE html>
-      <html dir="rtl">
+      <html dir="${dir}">
         <head>
           <meta charset="utf-8">
           <style>
@@ -195,7 +239,7 @@ export class EmailService {
               color: #ffffff;
               margin: 0;
               padding: 40px 20px;
-              direction: rtl;
+              direction: ${dir};
             }
             .container {
               max-width: 600px;
@@ -251,43 +295,43 @@ export class EmailService {
             }
             .warning {
               background: #2a1a1a;
-              border-right: 4px solid #ff6b6b;
+              ${borderSide}: 4px solid #ff6b6b;
               padding: 15px;
               margin-top: 20px;
               border-radius: 4px;
               font-size: 14px;
               color: #ffcccc;
-              text-align: right;
+              text-align: ${textAlign};
             }
             .expire-note {
               background: #1a2a1a;
-              border-right: 4px solid #4CAF50;
+              ${borderSide}: 4px solid #4CAF50;
               padding: 15px;
               margin-top: 20px;
               border-radius: 4px;
               font-size: 14px;
               color: #a5d6a7;
-              text-align: right;
+              text-align: ${textAlign};
             }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="logo">AI Platform</div>
-            <h1>بازیابی رمز عبور</h1>
-            <p>درخواست بازیابی رمز عبور برای حساب شما دریافت شد.</p>
-            <p>برای تغییر رمز عبور خود، روی دکمه زیر کلیک کنید:</p>
+            <h1>${t.title}</h1>
+            <p>${t.description}</p>
+            <p>${t.instruction}</p>
             <div class="button-container">
-              <a href="${resetLink}" class="reset-button">تغییر رمز عبور</a>
+              <a href="${resetLink}" class="reset-button">${t.button}</a>
             </div>
             <div class="expire-note">
-              این لینک تا <strong>۱ ساعت</strong> معتبر است.
+              ${t.expireNote}
             </div>
             <div class="warning">
-              <strong>هشدار امنیتی:</strong> اگر شما این درخواست را نداده‌اید، این ایمیل را نادیده بگیرید.
+              ${t.warning}
             </div>
             <div class="footer">
-              <p>در صورت بروز مشکل، با پشتیبانی تماس بگیرید.</p>
+              <p>${t.footer}</p>
             </div>
           </div>
         </body>

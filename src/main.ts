@@ -2,9 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json, raw } from 'express';
-import * as express from 'express';
-import { join } from 'path';
+import { json, raw, Request, Response } from 'express';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import * as Sentry from '@sentry/node';
@@ -42,7 +40,7 @@ async function bootstrap() {
   ].filter(Boolean) as string[];
 
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return callback(null, true);
 
@@ -65,7 +63,7 @@ async function bootstrap() {
   // ✅ Performance: Compression (SSE ve webhook hariç)
   app.use(
     compress({
-      filter: (req, res) => {
+      filter: (req: Request, res: Response) => {
         // SSE stream'leri sıkıştırma
         if (req.headers.accept === 'text/event-stream') {
           return false;

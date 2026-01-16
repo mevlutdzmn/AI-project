@@ -46,7 +46,7 @@ export class AuditLogInterceptor implements NestInterceptor {
     }
 
     const [, config] = auditConfig;
-    const startTime = Date.now();
+    const _startTime = Date.now();
 
     return next.handle().pipe(
       tap(async () => {
@@ -60,7 +60,7 @@ export class AuditLogInterceptor implements NestInterceptor {
           ipAddress: ip,
           userAgent,
           metadata: {
-            duration: Date.now() - startTime,
+            duration: Date.now() - _startTime,
           },
         });
       }),
@@ -76,7 +76,7 @@ export class AuditLogInterceptor implements NestInterceptor {
           userAgent,
           errorMessage: error.message,
           metadata: {
-            duration: Date.now() - startTime,
+            duration: Date.now() - _startTime,
           },
         });
         throw error;

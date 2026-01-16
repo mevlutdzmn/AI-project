@@ -13,6 +13,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { AuthenticatedRequest } from '../common/types';
 import {
   ApiTags,
   ApiOperation,
@@ -109,7 +110,7 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiResponse({ status: 200, description: 'User deleted' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async deleteUser(@Param('id') id: string, @Req() req) {
+  async deleteUser(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     try {
       const deleted = await this.adminService.deleteUser(
         parseInt(id),

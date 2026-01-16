@@ -432,15 +432,23 @@ export class AuthService {
     }
   }
 
-  async forgotPassword(email: string) {
+  async forgotPassword(email: string, locale: string = 'fa') {
     const user = await this.userService.findByEmail(email);
+
+    // Localized messages
+    const messages = {
+      tr: 'Bu e-posta sistemde kayıtlıysa, şifre sıfırlama linki gönderilecektir.',
+      en: 'If this email exists in our system, a password reset link will be sent.',
+      fa: 'اگر این ایمیل در سیستم وجود داشته باشد، لینک بازیابی رمز عبور ارسال خواهد شد.',
+    };
+
+    const message = messages[locale as keyof typeof messages] || messages.en;
 
     // Always return success to prevent email enumeration
     if (!user) {
       return {
         success: true,
-        message:
-          'اگر این ایمیل در سیستم وجود داشته باشد، لینک بازیابی رمز عبور ارسال خواهد شد.',
+        message,
       };
     }
 
@@ -465,12 +473,11 @@ export class AuthService {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-    await this.mailService.sendPasswordResetEmail(email, resetLink);
+    await this.mailService.sendPasswordResetEmail(email, resetLink, locale);
 
     return {
       success: true,
-      message:
-        'اگر این ایمیل در سیستم وجود داشته باشد، لینک بازیابی رمز عبور ارسال خواهد شد.',
+      message,
     };
   }
 

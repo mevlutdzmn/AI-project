@@ -9,6 +9,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { AuthenticatedRequest } from '../common/types';
 import {
   ApiTags,
   ApiOperation,
@@ -60,7 +61,7 @@ const ALLOWED_EXTENSIONS = [
 ];
 
 // ✅ Security: Dosya filtresi
-const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
+const fileFilter = (_req: any, file: Express.Multer.File, cb: any) => {
   const ext = extname(file.originalname).toLowerCase();
   const mime = file.mimetype.toLowerCase();
 
@@ -90,14 +91,14 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
 // Multer configuration for local development
 const localMulterOptions = {
   storage: diskStorage({
-    destination: (req, file, cb) => {
+    destination: (_req, _file, cb) => {
       const dest = process.env.UPLOAD_DIR || './uploads';
       if (!fs.existsSync(dest)) {
         fs.mkdirSync(dest, { recursive: true });
       }
       cb(null, dest);
     },
-    filename: (req, file, cb) => {
+    filename: (_req, file, cb) => {
       // ✅ Security: Use crypto.randomBytes instead of Math.random
       const randomName = crypto.randomBytes(16).toString('hex');
       cb(null, `${randomName}${extname(file.originalname)}`);
@@ -142,7 +143,7 @@ export class UploadController {
       isVercel ? vercelMulterOptions : localMulterOptions,
     ),
   )
-  async uploadFile(@UploadedFile() file: Express.Multer.File, @Req() req) {
+  async uploadFile(@UploadedFile() file: Express.Multer.File, @Req() req: AuthenticatedRequest) {
     if (!file) {
       throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
     }
@@ -233,7 +234,7 @@ export class UploadController {
   })
   @ApiResponse({ status: 201, description: 'Image saved successfully' })
   @ApiResponse({ status: 400, description: 'Invalid URL' })
-  async saveImageFromUrl(@Body('imageUrl') imageUrl: string, @Req() req) {
+  async saveImageFromUrl(@Body('imageUrl') imageUrl: string, @Req() _req: AuthenticatedRequest) {
     if (!imageUrl) {
       throw new HttpException('Image URL is required', HttpStatus.BAD_REQUEST);
     }

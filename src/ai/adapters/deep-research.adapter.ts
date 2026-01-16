@@ -166,7 +166,7 @@ function detectLanguage(text: string): 'tr' | 'fa' | 'en' {
       turkishCount++;
     }
   }
-  if (turkishCount >= 2) {
+  if (turkishCount >= 1) {
     return 'tr';
   }
 
@@ -177,6 +177,24 @@ function detectLanguage(text: string): 'tr' | 'fa' | 'en' {
   }
 
   return 'en';
+}
+
+/**
+ * Strips HTML tags and entities from text
+ * Used to sanitize web search results that may contain HTML
+ */
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace HTML space entity
+    .replace(/&amp;/g, '&') // Replace HTML ampersand entity
+    .replace(/&lt;/g, '<') // Replace HTML less-than entity
+    .replace(/&gt;/g, '>') // Replace HTML greater-than entity
+    .replace(/&quot;/g, '"') // Replace HTML quote entity
+    .replace(/&#39;/g, "'") // Replace HTML apostrophe entity
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
 }
 
 interface SearchResult {
@@ -606,7 +624,8 @@ Respond in JSON:
             if (item.type === 'message' && item.content) {
               for (const content of item.content) {
                 if (content.type === 'text') {
-                  searchSummary = content.text;
+                  // Strip HTML tags from web search results
+                  searchSummary = stripHtml(content.text);
                 }
               }
             }
@@ -761,8 +780,9 @@ Provide a comprehensive analysis in JSON:
 CRITICAL REQUIREMENTS:
 1. Write ENTIRELY in ${reportLanguage}
 2. Minimum 3000 words (this is mandatory)
-3. Use markdown formatting with clear headers
-4. Include specific data, statistics, and examples from the research
+3. Use markdown formatting with clear headers (# ## ### for headings, **bold**, *italic*, etc.)
+4. **NEVER use HTML tags** - only use Markdown syntax. No <a>, <p>, <strong>, <div>, <span> or any HTML elements.
+5. Include specific data, statistics, and examples from the research
 5. **INLINE CITATIONS**: Add source citations INSIDE the text, right after the relevant information. Use format: [domain.com](full_url). Example: "Kediler Mısır'da kutsal sayılırdı [wikipedia.org](https://tr.wikipedia.org/wiki/Kedi)."
 6. Do NOT put all sources at the end. Cite sources inline where the information appears.
 7. Be thorough, detailed, and provide actionable insights

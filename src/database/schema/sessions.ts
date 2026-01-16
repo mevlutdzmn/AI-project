@@ -16,6 +16,7 @@ export const sessions = pgTable('sessions', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull().default('New Chat'),
+  model: text('model'), // ✅ Son kullanılan model
   pinned: boolean('pinned').notNull().default(false),
   archived: boolean('archived').notNull().default(false),
   folderId: integer('folder_id').references(() => folders.id, {

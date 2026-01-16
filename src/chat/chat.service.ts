@@ -24,7 +24,8 @@ import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../database/schema';
 import { sessions, messages } from '../database/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
-import { OpenAIAdapter, ChatMessage, FunctionCallResult } from '../ai/adapters/openai.adapter';
+import { OpenAIAdapter, ChatMessage } from '../ai/adapters/openai.adapter';
+import { AdapterFactory } from '../ai/factories/adapter.factory';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { MemoryService } from '../memory/memory.service';
@@ -46,8 +47,9 @@ export class ChatService {
   constructor(
     @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
     private openai: OpenAIAdapter,
+    private adapterFactory: AdapterFactory,
     private usersService: UsersService,
-    private configService: ConfigService,
+    private _configService: ConfigService,
     private memoryService: MemoryService,
     private usageService: UsageService,
     // Specialized services (SOLID - Dependency Injection)
@@ -235,8 +237,15 @@ export class ChatService {
     userId: number,
     limit: number = 10,
     beforeId?: number,
-  ): Promise<{ messages: any[]; hasMore: boolean }> {
+  ): Promise<{ messages: any[]; hasMore: boolean; sessionModel?: string }> {
     await this.ensureSessionOwnership(sessionId, userId);
+
+    // ✅ Get session's last used model
+    const [session] = await this.db
+      .select({ model: sessions.model })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
 
     const conditions = [eq(messages.sessionId, sessionId)];
 
@@ -257,6 +266,7 @@ export class ChatService {
     return {
       messages: messagesToReturn.reverse(),
       hasMore,
+      sessionModel: session?.model || undefined, // ✅ Return session's model
     };
   }
 
@@ -433,7 +443,8 @@ export class ChatService {
     });
 
     // ✅ Use Function Calling - AI decides if it's an image request
-    const functionResult = await this.openai.chatWithFunctionCalling(
+    // AdapterFactory routes to OpenAI or Gemini based on model
+    const functionResult = await this.adapterFactory.chatWithFunctionCalling(
       chatMessages,
       model,
       hasRecentImage,
@@ -514,7 +525,7 @@ export class ChatService {
       })
       .returning();
 
-    await this.touchSession(sessionId);
+    await this.touchSession(sessionId, model);
 
     return {
       response: aiResponse,
@@ -634,12 +645,79 @@ export class ChatService {
         })
         .returning();
 
-      await this.touchSession(sessionId);
+      await this.touchSession(sessionId, model);
       return {
         sessionId,
         userMessageId: userMsg.id,
         assistantMessageId: assistantMsg.id,
       };
+    }
+
+    // ============================================
+    // ✅ Check if this is a Gemini model
+    // ============================================
+    const isGeminiModel = model.startsWith('gemini') || model.startsWith('models/gemini');
+    const isGeminiImageModel = model === 'gemini-2.5-flash-image' || 
+                               model === 'gemini-3-pro-image-preview' || 
+                               model.startsWith('imagen');
+
+    // ============================================
+    // ✅ For Gemini IMAGE models: Use native Gemini image generation
+    // ============================================
+    if (isGeminiImageModel) {
+      const isImageRequest = this.imageService.isImageRequest(messageText || '');
+      if (isImageRequest) {
+        this.logger.log(`[SendMessageStream] Gemini IMAGE model - using native Nano Banana/Imagen`);
+        const imageResult = await this.imageService.handleGeminiImageRequest(
+          sessionId,
+          messageText || 'Generate an image',
+          model,
+        );
+        onChunk(imageResult.content);
+        return { sessionId, userMessageId: userMsg.id, assistantMessageId: imageResult.assistantMessageId };
+      }
+    }
+
+    // ============================================
+    // ✅ For Gemini CHAT models: Check for image generation OR edit requests
+    // User selected Gemini → images should be generated with Gemini
+    // ============================================
+    if (isGeminiModel && !isGeminiImageModel) {
+      const isImageRequest = this.imageService.isImageRequest(messageText || '');
+      const hasRecentImageInSession = await this.imageService.hasRecentImageInSession(sessionId);
+      const isEditRequest = this.imageService.isImageEditFollowUp(messageText || '');
+      
+      this.logger.debug(`[Gemini] isImageRequest=${isImageRequest}, hasRecentImage=${hasRecentImageInSession}, isEditRequest=${isEditRequest}, msg="${messageText}"`);
+      
+      // New image request
+      if (isImageRequest) {
+        this.logger.log(`[SendMessageStream] Gemini CHAT model - new image request → using Gemini Image`);
+        const imageResult = await this.imageService.handleGeminiImageRequest(
+          sessionId,
+          messageText || 'Generate an image',
+          'gemini-2.0-flash-exp', // Use Gemini's native image model
+        );
+        onChunk(imageResult.content);
+        return { sessionId, userMessageId: userMsg.id, assistantMessageId: imageResult.assistantMessageId };
+      }
+      
+      // Edit request (has recent image + edit keywords like "daha gerçekçi olsun")
+      if (hasRecentImageInSession && isEditRequest) {
+        this.logger.log(`[SendMessageStream] Gemini CHAT model - edit request detected → using Gemini Image`);
+        // Get the previous image prompt and combine with edit request
+        const previousContext = await this.imageService.findPreviousImageContext(sessionId);
+        const editPrompt = previousContext?.revisedPrompt 
+          ? `${previousContext.revisedPrompt}. Now make it: ${messageText}`
+          : messageText || 'Edit the image';
+        
+        const imageResult = await this.imageService.handleGeminiImageRequest(
+          sessionId,
+          editPrompt,
+          'gemini-2.0-flash-exp',
+        );
+        onChunk(imageResult.content);
+        return { sessionId, userMessageId: userMsg.id, assistantMessageId: imageResult.assistantMessageId };
+      }
     }
 
     // ============================================
@@ -668,7 +746,8 @@ export class ChatService {
     });
 
     // ✅ Use Function Calling - AI decides if it's an image request
-    const functionResult = await this.openai.chatWithFunctionCalling(
+    // AdapterFactory routes to OpenAI or Gemini based on model
+    const functionResult = await this.adapterFactory.chatWithFunctionCalling(
       chatMessages,
       model,
       hasRecentImage,
@@ -746,7 +825,7 @@ export class ChatService {
       })
       .returning();
 
-    await this.touchSession(sessionId);
+    await this.touchSession(sessionId, model);
     await this.titleService.autoGenerateTitle(sessionId);
 
     return {
@@ -840,7 +919,8 @@ export class ChatService {
         content: msg.content as any,
       }));
 
-    const { content: response, usage } = await this.openai.chat(
+    // AdapterFactory routes to OpenAI or Gemini based on model
+    const { content: response, usage } = await this.adapterFactory.chat(
       chatMessages,
       model || 'gpt-4o',
       undefined,
@@ -864,7 +944,7 @@ export class ChatService {
       model: model || 'gpt-4o',
     });
 
-    await this.touchSession(sessionId);
+    await this.touchSession(sessionId, model || 'gpt-4o');
     return response;
   }
 
@@ -912,7 +992,8 @@ export class ChatService {
     ];
 
     try {
-      await this.openai.streamChat(
+      // AdapterFactory routes to OpenAI or Gemini based on model
+      await this.adapterFactory.streamChat(
         chatMessages,
         (chunk) => {
           fullResponse += chunk;
@@ -964,7 +1045,7 @@ export class ChatService {
       })
       .returning();
 
-    await this.touchSession(sessionId);
+    await this.touchSession(sessionId, model);
     await this.titleService.autoGenerateTitle(sessionId);
 
     return {
@@ -1004,10 +1085,14 @@ export class ChatService {
     }
   }
 
-  private async touchSession(sessionId: string) {
+  private async touchSession(sessionId: string, model?: string) {
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (model) {
+      updateData.model = model; // ✅ Session'a son kullanılan modeli kaydet
+    }
     await this.db
       .update(sessions)
-      .set({ updatedAt: new Date() })
+      .set(updateData)
       .where(eq(sessions.id, sessionId));
   }
 

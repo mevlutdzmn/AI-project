@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { SearchAdapter } from '../adapters/search.adapter';
 import { AuthGuard } from '@nestjs/passport';
 

@@ -10,7 +10,7 @@ export class SearchQueryDto {
     maxLength: 500,
   })
   @IsString()
-  query: string;
+  query!: string;
 
   @ApiPropertyOptional({
     description: 'Maximum number of results to return',

@@ -7,14 +7,14 @@ import { ConfigService } from '@nestjs/config';
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   private readonly logger = new Logger(GoogleStrategy.name);
 
-  constructor(private configService: ConfigService) {
+  constructor(private _configService: ConfigService) {
     // Detect environment: Vercel production vs local development
     const isVercel = process.env.VERCEL === '1';
 
     // Use production URL on Vercel, otherwise use environment variable or fallback to localhost
     const backendUrl = isVercel
       ? 'https://nestjs-back-kohl.vercel.app/api/v1'
-      : configService.get<string>('BACKEND_URL') ||
+      : _configService.get<string>('BACKEND_URL') ||
         'http://localhost:4000/api/v1';
 
     const callbackURL = `${backendUrl}/auth/google/callback`;
@@ -26,8 +26,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     );
 
     super({
-      clientID: configService.get<string>('GOOGLE_CLIENT_ID') || '',
-      clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET') || '',
+      clientID: _configService.get<string>('GOOGLE_CLIENT_ID') || '',
+      clientSecret: _configService.get<string>('GOOGLE_CLIENT_SECRET') || '',
       callbackURL,
       scope: ['email', 'profile'],
     } as any);
@@ -35,7 +35,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
   async validate(
     accessToken: string,
-    refreshToken: string,
+    _refreshToken: string,
     profile: any,
     done: VerifyCallback,
   ): Promise<any> {

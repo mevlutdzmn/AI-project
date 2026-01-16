@@ -20,6 +20,199 @@ import { OpenAIAdapter, ChatMessage } from '../../ai/adapters/openai.adapter';
 import { SearchAdapter } from '../../ai/adapters/search.adapter';
 import { DeepResearchAdapter } from '../../ai/adapters/deep-research.adapter';
 
+/**
+ * Parse message content - handles string, JSON array, and markdown image formats
+ * This is critical for image support:
+ * - JSON stringified arrays (user-uploaded images) → parsed back to arrays
+ * - Markdown images (AI-generated) → converted to OpenAI Vision format
+ */
+function parseMessageContent(content: any): string | any[] {
+  if (typeof content === 'string') {
+    // Try to parse as JSON (might be stringified array with images)
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        return parsed; // Return as array for proper image handling
+      }
+    } catch {
+      // Not JSON, continue to check for markdown images
+    }
+
+    // Check for markdown images: ![alt](url) - AI-generated images
+    const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    const matches = [...content.matchAll(imageRegex)];
+
+    if (matches.length > 0) {
+      const parts: any[] = [];
+      let lastIndex = 0;
+
+      for (const match of matches) {
+        const matchIndex = match.index ?? 0;
+
+        // Add text before the image (if any)
+        if (matchIndex > lastIndex) {
+          const textBefore = content.slice(lastIndex, matchIndex).trim();
+          if (textBefore) {
+            parts.push({ type: 'text', text: textBefore });
+          }
+        }
+
+        // Add the image in OpenAI Vision format
+        const imageUrl = match[2];
+        parts.push({
+          type: 'image_url',
+          image_url: { url: imageUrl },
+        });
+
+        lastIndex = matchIndex + match[0].length;
+      }
+
+      // Add remaining text after last image (if any)
+      const remaining = content.slice(lastIndex).trim();
+      if (remaining) {
+        parts.push({ type: 'text', text: remaining });
+      }
+
+      return parts.length > 0 ? parts : content;
+    }
+
+    return content;
+  }
+  // Already an array or object, return as-is
+  return content;
+}
+
+/**
+ * Extract images from parsed content
+ * Returns array of image URLs found in the content
+ */
+function extractImagesFromContent(content: string | any[]): string[] {
+  if (typeof content === 'string') {
+    return [];
+  }
+  if (Array.isArray(content)) {
+    return content
+      .filter((part) => part.type === 'image_url' && part.image_url?.url)
+      .map((part) => part.image_url.url);
+  }
+  return [];
+}
+
+/**
+ * Convert message history for agent/research mode
+ * Key insight: OpenAI Responses API doesn't allow images in assistant messages
+ * So we extract images from assistant messages and inject them into the user's prompt
+ */
+function prepareMessagesForAgent(
+  history: Array<{ role: string; content: any }>,
+  userPrompt: string,
+): ChatMessage[] {
+  const chatMessages: ChatMessage[] = [];
+  const collectedImages: string[] = [];
+
+  for (const msg of history) {
+    const parsedContent = parseMessageContent(msg.content);
+
+    if (msg.role === 'assistant') {
+      // Extract images from assistant messages for later injection
+      const images = extractImagesFromContent(parsedContent);
+      collectedImages.push(...images);
+
+      // For assistant messages, only keep text content
+      if (Array.isArray(parsedContent)) {
+        const textParts = parsedContent.filter((p) => p.type === 'text');
+        if (textParts.length > 0) {
+          chatMessages.push({
+            role: 'assistant',
+            content: textParts.map((p) => p.text).join('\n'),
+          });
+        } else {
+          // If only images, add placeholder
+          chatMessages.push({
+            role: 'assistant',
+            content: '[Image was generated]',
+          });
+        }
+      } else {
+        chatMessages.push({ role: 'assistant', content: parsedContent });
+      }
+    } else {
+      // User messages - keep as-is with images
+      chatMessages.push({
+        role: msg.role as 'user' | 'assistant',
+        content: parsedContent,
+      });
+    }
+  }
+
+  // Build final user message with collected images
+  if (collectedImages.length > 0) {
+    // Include images from assistant messages in the user prompt
+    const userContent: any[] = [{ type: 'text', text: userPrompt }];
+    for (const imageUrl of collectedImages) {
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: imageUrl },
+      });
+    }
+    chatMessages.push({ role: 'user', content: userContent });
+  } else {
+    chatMessages.push({ role: 'user', content: userPrompt });
+  }
+
+  return chatMessages;
+}
+
+/**
+ * Detect language from text
+ */
+type Language = 'tr' | 'fa' | 'en';
+
+function detectLanguage(text: string): Language {
+  const isTurkish =
+    /[ğüşıöçĞÜŞİÖÇ]/.test(text) ||
+    /\b(bir|ve|için|ile|bu|ne|nasıl|neden|kim|nerede|yap|et|ol|de|da|analiz|araştır|merhaba)\b/i.test(text);
+  const isPersian = /[\u0600-\u06FF]/.test(text);
+
+  if (isTurkish) return 'tr';
+  if (isPersian) return 'fa';
+  return 'en';
+}
+
+/**
+ * i18n messages for research/agent/web modes
+ */
+const i18n = {
+  tr: {
+    searchingWeb: '🔍 **Web\'de aranıyor...**\n\n',
+    sourcesFound: (n: number) => `📚 **${n} kaynak bulundu**\n\n`,
+    searchError: '⚠️ Web araması başarısız. Mevcut bilgilerle devam...\n\n',
+    deepAnalysis: '🧠 **Derin analiz yapılıyor...**\n\n---\n\n',
+    source: (idx: number) => `**Kaynak ${idx}:**`,
+    link: 'Link:',
+  },
+  fa: {
+    searchingWeb: '🔍 **در حال جستجوی وب...**\n\n',
+    sourcesFound: (n: number) => `📚 **${n} منبع یافت شد**\n\n`,
+    searchError: '⚠️ خطا در جستجوی وب. ادامه با اطلاعات موجود...\n\n',
+    deepAnalysis: '🧠 **در حال تحلیل عمیق...**\n\n---\n\n',
+    source: (idx: number) => `**منبع ${idx}:**`,
+    link: 'لینک:',
+  },
+  en: {
+    searchingWeb: '🔍 **Searching the web...**\n\n',
+    sourcesFound: (n: number) => `📚 **${n} sources found**\n\n`,
+    searchError: '⚠️ Web search failed. Continuing with available info...\n\n',
+    deepAnalysis: '🧠 **Performing deep analysis...**\n\n---\n\n',
+    source: (idx: number) => `**Source ${idx}:**`,
+    link: 'Link:',
+  },
+};
+
+function getI18n(text: string) {
+  return i18n[detectLanguage(text)];
+}
+
 @Injectable()
 export class ChatResearchService {
   private readonly logger = new Logger(ChatResearchService.name);
@@ -34,7 +227,7 @@ export class ChatResearchService {
   /**
    * Start deep research session
    */
-  async startDeepResearch(prompt: string, sessionId?: string, model?: string) {
+  async startDeepResearch(prompt: string, _sessionId?: string, _model?: string) {
     return this.deepResearch.startResearch(prompt);
   }
 
@@ -110,7 +303,7 @@ export class ChatResearchService {
    */
   async handleResearchMode(
     sessionId: string,
-    userId: number,
+    _userId: number,
     query: string,
     onChunk: (chunk: string) => void,
     model: string,
@@ -122,10 +315,13 @@ export class ChatResearchService {
   }> {
     this.logger.log(`[Research Mode] Starting deep research for: ${query}`);
 
+    // Detect language for i18n
+    const msgs = getI18n(query);
+
     // 1. Web search
     let searchContext = '';
     try {
-      onChunk('🔍 **در حال جستجوی وب...**\n\n');
+      onChunk(msgs.searchingWeb);
 
       const searchResult = await this.search.search(query);
 
@@ -134,33 +330,25 @@ export class ChatResearchService {
         searchContext = topResults
           .map(
             (r: any, idx: number) =>
-              `**منبع ${idx + 1}:** ${r.name}\n${r.snippet}\nلینک: ${r.url}`,
+              `${msgs.source(idx + 1)} ${r.name}\n${r.snippet}\n${msgs.link} ${r.url}`,
           )
           .join('\n\n');
 
-        onChunk(`📚 **${topResults.length} منبع یافت شد**\n\n`);
+        onChunk(msgs.sourcesFound(topResults.length));
       }
     } catch (error) {
       this.logger.error('[Research Mode] Search error:', error);
-      onChunk('⚠️ خطا در جستجوی وب. در حال ادامه با اطلاعات موجود...\n\n');
+      onChunk(msgs.searchError);
     }
 
     // 2. AI deep analysis
-    onChunk('🧠 **در حال تحلیل عمیق...**\n\n---\n\n');
+    onChunk(msgs.deepAnalysis);
 
     const researchPrompt = this.buildResearchPrompt(query, searchContext);
     const history = await this.getRecentMessages(sessionId);
     
-    const chatMessages: ChatMessage[] = [
-      ...history.map((msg) => ({
-        role: msg.role as 'user' | 'assistant',
-        content:
-          typeof msg.content === 'string'
-            ? msg.content
-            : JSON.stringify(msg.content),
-      })),
-      { role: 'user' as const, content: researchPrompt },
-    ];
+    // ✅ FIX: Use prepareMessagesForAgent to properly handle images
+    const chatMessages = prepareMessagesForAgent(history, researchPrompt);
 
     let fullResponse = '';
     await this.openai.streamChat(
@@ -196,7 +384,7 @@ export class ChatResearchService {
    */
   async handleAgentMode(
     sessionId: string,
-    userId: number,
+    _userId: number,
     task: string,
     onChunk: (chunk: string) => void,
     model: string,
@@ -214,16 +402,11 @@ export class ChatResearchService {
     onChunk(analyzingMsg);
 
     const history = await this.getRecentMessages(sessionId);
-    const chatMessages: ChatMessage[] = [
-      ...history.map((msg) => ({
-        role: msg.role as 'user' | 'assistant',
-        content:
-          typeof msg.content === 'string'
-            ? msg.content
-            : JSON.stringify(msg.content),
-      })),
-      { role: 'user' as const, content: agentPrompt },
-    ];
+    
+    // ✅ FIX: Use prepareMessagesForAgent to properly handle images
+    // This extracts images from assistant messages and injects them into user prompt
+    // because OpenAI Responses API doesn't support images in assistant messages
+    const chatMessages = prepareMessagesForAgent(history, agentPrompt);
 
     let fullResponse = '';
     await this.openai.streamChat(
@@ -265,7 +448,10 @@ export class ChatResearchService {
   ): Promise<string> {
     this.logger.log(`[Web Mode] Starting web search for: ${query}`);
 
-    onChunk('🔍 **در حال جستجو در وب...**\n\n');
+    // Detect language for i18n
+    const msgs = getI18n(query);
+
+    onChunk(msgs.searchingWeb);
     const searchResult = await this.search.search(query || '');
 
     if (searchResult.type === 'results' && searchResult.results.length > 0) {
@@ -283,16 +469,10 @@ export class ChatResearchService {
       const webPrompt = this.buildWebPrompt(query, searchContext);
       const history = await this.getRecentMessages(sessionId);
       
-      const chatMessages: ChatMessage[] = [
-        ...history.slice(-4).map((msg) => ({
-          role: msg.role as 'user' | 'assistant',
-          content:
-            typeof msg.content === 'string'
-              ? msg.content
-              : JSON.stringify(msg.content),
-        })),
-        { role: 'user' as const, content: webPrompt },
-      ];
+      // ✅ FIX: Use prepareMessagesForAgent to properly handle images
+      // Note: We only use last 4 messages for web mode to keep context focused
+      const limitedHistory = history.slice(-4);
+      const chatMessages = prepareMessagesForAgent(limitedHistory, webPrompt);
 
       let fullResponse = '';
       await this.openai.streamChat(
@@ -304,7 +484,7 @@ export class ChatResearchService {
         model,
       );
 
-      return '🔍 **در حال جستجو در وب...**\n\n' + fullResponse;
+      return msgs.searchingWeb + fullResponse;
     } else {
       // No results - use AI knowledge
       this.logger.log(`[Web Mode] No search results, using AI knowledge`);
@@ -377,30 +557,32 @@ ${searchContext}
     analyzingMsg: string;
     agentPrompt: string;
   } {
-    const isTurkish =
-      /[ğüşıöçĞÜŞİÖÇ]/.test(task) ||
-      /\b(bir|ve|için|ile|bu|ne|nasıl|neden|kim|nerede|yap|et|ol|de|da)\b/i.test(task);
-    const isPersian = /[\u0600-\u06FF]/.test(task);
+    const lang = detectLanguage(task);
 
-    if (isPersian) {
-      return {
-        activatedMsg: '🤖 **حالت ایجنت فعال شد**\n\n',
-        analyzingMsg: '📋 **در حال تحلیل وظیفه...**\n\n',
-        agentPrompt: this.getPersianAgentPrompt(task),
-      };
-    } else if (isTurkish) {
-      return {
+    const agentI18n = {
+      tr: {
         activatedMsg: '🤖 **Agent Modu Aktif**\n\n',
         analyzingMsg: '📋 **Görev analiz ediliyor...**\n\n',
-        agentPrompt: this.getTurkishAgentPrompt(task),
-      };
-    } else {
-      return {
+        getPrompt: () => this.getTurkishAgentPrompt(task),
+      },
+      fa: {
+        activatedMsg: '🤖 **حالت ایجنت فعال شد**\n\n',
+        analyzingMsg: '📋 **در حال تحلیل وظیفه...**\n\n',
+        getPrompt: () => this.getPersianAgentPrompt(task),
+      },
+      en: {
         activatedMsg: '🤖 **Agent Mode Activated**\n\n',
         analyzingMsg: '📋 **Analyzing task...**\n\n',
-        agentPrompt: this.getEnglishAgentPrompt(task),
-      };
-    }
+        getPrompt: () => this.getEnglishAgentPrompt(task),
+      },
+    };
+
+    const msgs = agentI18n[lang];
+    return {
+      activatedMsg: msgs.activatedMsg,
+      analyzingMsg: msgs.analyzingMsg,
+      agentPrompt: msgs.getPrompt(),
+    };
   }
 
   private getPersianAgentPrompt(task: string): string {
@@ -502,11 +684,26 @@ Summary of the work done and final output
     onChunk: (chunk: string) => void,
     model: string,
   ): Promise<string> {
-    const webPrompt = `Kullanıcının sorusu: "${query}"
+    const msgs = getI18n(query);
+    const lang = detectLanguage(query);
+    
+    const prompts = {
+      tr: `Kullanıcının sorusu: "${query}"
 
 Web araması yapılamadı ama bilgilerinle yardımcı ol. TÜRKÇE cevap ver.
 Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önererek markdown formatında linkle:
-Örnek: "Güncel haberler için [TRT Haber](https://www.trthaber.com) sitesini ziyaret edebilirsiniz."`;
+Örnek: "Güncel haberler için [TRT Haber](https://www.trthaber.com) sitesini ziyaret edebilirsiniz."`,
+      fa: `سوال کاربر: "${query}"
+
+جستجوی وب امکان‌پذیر نبود اما با اطلاعات خود کمک کن. به فارسی پاسخ بده.
+اگر سوال نیاز به اطلاعات به‌روز دارد، سایت‌های مرتبط را با فرمت markdown پیشنهاد بده.`,
+      en: `User's question: "${query}"
+
+Web search was not possible but help with your knowledge. Answer in ENGLISH.
+If the question requires current information, suggest relevant sites with markdown format links.`,
+    };
+
+    const webPrompt = prompts[lang];
 
     const history = await this.getRecentMessages(sessionId);
     const chatMessages: ChatMessage[] = [
@@ -530,7 +727,7 @@ Eğer güncel bilgi gerektiren bir soruysa, kullanıcıya ilgili siteleri önere
       model,
     );
 
-    return '🔍 **در حال جستجو در وب...**\n\n' + fullResponse;
+    return msgs.searchingWeb + fullResponse;
   }
 
   private async getRecentMessages(sessionId: string, limit: number = 20) {

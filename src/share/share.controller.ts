@@ -9,12 +9,12 @@ import {
   UseGuards,
   Request,
   Res,
-  Header,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ShareService } from './share.service';
+import { AuthenticatedRequest } from '../common/types';
 
 @ApiTags('Share & Export')
 @Controller('chat')
@@ -28,7 +28,7 @@ export class ShareController {
   @ApiOperation({ summary: 'Create a share link for a chat session' })
   async createShare(
     @Param('sessionId') sessionId: string,
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Query('expiresInDays') expiresInDays?: string,
   ) {
     const userId = req.user.sub || req.user.id;
@@ -51,7 +51,7 @@ export class ShareController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a share link' })
-  async deleteShare(@Param('shareToken') shareToken: string, @Request() req) {
+  async deleteShare(@Param('shareToken') shareToken: string, @Request() req: AuthenticatedRequest) {
     const userId = req.user.sub || req.user.id;
     return this.shareService.deleteShareLink(shareToken, userId);
   }
@@ -63,7 +63,7 @@ export class ShareController {
   @ApiOperation({ summary: 'Export chat to Markdown format' })
   async exportMarkdown(
     @Param('sessionId') sessionId: string,
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Res() res: Response,
   ) {
     const userId = req.user.sub || req.user.id;
@@ -87,7 +87,7 @@ export class ShareController {
   @ApiOperation({ summary: 'Export chat to JSON format' })
   async exportJson(
     @Param('sessionId') sessionId: string,
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Res() res: Response,
   ) {
     const userId = req.user.sub || req.user.id;
@@ -114,7 +114,7 @@ export class ShareController {
       },
     },
   })
-  async shareMessage(@Body('content') content: string, @Request() req) {
+  async shareMessage(@Body('content') content: string, @Request() req: AuthenticatedRequest) {
     const userId = req.user?.sub || req.user?.id;
     return this.shareService.shareMessage(content, userId);
   }

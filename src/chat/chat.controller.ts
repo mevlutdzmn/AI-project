@@ -13,6 +13,7 @@ import {
   Logger,
   HttpStatus,
 } from '@nestjs/common';
+import { AuthenticatedRequest } from '../common/types';
 import {
   ApiTags,
   ApiOperation,
@@ -47,7 +48,7 @@ export class ChatController {
   @Post('sessions')
   @ApiOperation({ summary: 'Create new chat session' })
   @ApiResponse({ status: 201, description: 'Session created successfully' })
-  async createSession(@Req() req, @Body() body: CreateSessionDto) {
+  async createSession(@Req() req: AuthenticatedRequest, @Body() body: CreateSessionDto) {
     return this.chatService.createSession(req.user.id, body.title);
   }
 
@@ -55,7 +56,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Start new chat with first message' })
   @ApiResponse({ status: 201, description: 'Chat started successfully' })
   async startChat(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Body() body: { message: string; model?: string; mode?: string },
   ) {
     const { message, model, mode } = body;
@@ -97,7 +98,7 @@ export class ChatController {
     status: 200,
     description: 'Search results with highlighted snippets',
   })
-  async searchConversations(@Req() req, @Query() query: SearchQueryDto) {
+  async searchConversations(@Req() req: AuthenticatedRequest, @Query() query: SearchQueryDto) {
     return this.searchService.search(req.user.id, query);
   }
 
@@ -105,7 +106,7 @@ export class ChatController {
   @SkipThrottle()
   @ApiOperation({ summary: 'Get all user chat sessions' })
   @ApiResponse({ status: 200, description: 'Returns user sessions' })
-  async getUserSessions(@Req() req) {
+  async getUserSessions(@Req() req: AuthenticatedRequest) {
     return this.chatService.getUserSessions(req.user.id);
   }
 
@@ -127,7 +128,7 @@ export class ChatController {
   })
   @ApiResponse({ status: 200, description: 'Returns session messages' })
   async getSessionMessages(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Param('sessionId') sessionId: string,
     @Query('limit') limit?: string,
     @Query('beforeId') beforeId?: string,
@@ -153,7 +154,7 @@ export class ChatController {
   @ApiQuery({ name: 'after', required: false, description: 'Messages after target (default: 25)' })
   @ApiResponse({ status: 200, description: 'Returns messages around target' })
   async getMessagesAroundId(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Param('sessionId') sessionId: string,
     @Param('messageId') messageId: string,
     @Query('before') before?: string,
@@ -173,7 +174,7 @@ export class ChatController {
   @Post('messages')
   @ApiOperation({ summary: 'Send message to AI (non-streaming)' })
   @ApiResponse({ status: 201, description: 'Message sent successfully' })
-  async sendMessage(@Req() req, @Body() body: SendMessageDto) {
+  async sendMessage(@Req() req: AuthenticatedRequest, @Body() body: SendMessageDto) {
     return this.chatService.sendMessage(
       body.sessionId,
       req.user.id,
@@ -188,7 +189,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Save voice transcript as chat message' })
   @ApiResponse({ status: 201, description: 'Voice message saved' })
   async saveVoiceMessage(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Body()
     body: { sessionId: string; content: string; role: 'user' | 'assistant' },
   ) {
@@ -213,7 +214,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Send message to AI with SSE streaming' })
   @ApiResponse({ status: 200, description: 'Stream started' })
   async sendMessageStream(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Res() res: Response,
     @Body() body: StreamMessageDto,
   ) {
@@ -300,28 +301,28 @@ export class ChatController {
   @ApiOperation({ summary: 'Delete chat session' })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({ status: 200, description: 'Session deleted' })
-  async deleteSession(@Req() req, @Param('sessionId') sessionId: string) {
+  async deleteSession(@Req() req: AuthenticatedRequest, @Param('sessionId') sessionId: string) {
     return this.chatService.deleteSession(sessionId, req.user.id);
   }
 
   @Delete('sessions')
   @ApiOperation({ summary: 'Delete all chat sessions for user' })
   @ApiResponse({ status: 200, description: 'All sessions deleted' })
-  async deleteAllSessions(@Req() req) {
+  async deleteAllSessions(@Req() req: AuthenticatedRequest) {
     return this.chatService.deleteAllSessions(req.user.id);
   }
 
   @Get('sessions/pinned')
   @ApiOperation({ summary: 'Get pinned sessions' })
   @ApiResponse({ status: 200, description: 'Pinned sessions list' })
-  async getPinnedSessions(@Req() req) {
+  async getPinnedSessions(@Req() req: AuthenticatedRequest) {
     return this.chatService.getPinnedSessions(req.user.id);
   }
 
   @Get('sessions/archived')
   @ApiOperation({ summary: 'Get archived sessions' })
   @ApiResponse({ status: 200, description: 'Archived sessions list' })
-  async getArchivedSessions(@Req() req) {
+  async getArchivedSessions(@Req() req: AuthenticatedRequest) {
     return this.chatService.getArchivedSessions(req.user.id);
   }
 
@@ -329,7 +330,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Toggle pin session' })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({ status: 200, description: 'Session pin toggled' })
-  async togglePinSession(@Req() req, @Param('sessionId') sessionId: string) {
+  async togglePinSession(@Req() req: AuthenticatedRequest, @Param('sessionId') sessionId: string) {
     return this.chatService.togglePinSession(sessionId, req.user.id);
   }
 
@@ -338,7 +339,7 @@ export class ChatController {
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({ status: 200, description: 'Session archive toggled' })
   async toggleArchiveSession(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Param('sessionId') sessionId: string,
   ) {
     return this.chatService.toggleArchiveSession(sessionId, req.user.id);
@@ -349,7 +350,7 @@ export class ChatController {
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({ status: 200, description: 'Session moved to folder' })
   async moveSessionToFolder(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Param('sessionId') sessionId: string,
     @Body() body: { folderId: number | null },
   ) {
@@ -365,7 +366,7 @@ export class ChatController {
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({ status: 200, description: 'Session updated' })
   async updateSession(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Param('sessionId') sessionId: string,
     @Body() body: UpdateSessionDto,
   ) {
@@ -376,7 +377,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Regenerate last assistant message' })
   @ApiResponse({ status: 201, description: 'Message regenerated' })
   async regenerateMessage(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Body() body: { sessionId: string; model?: string },
   ) {
     const response = await this.chatService.regenerateLastMessage(
@@ -392,7 +393,7 @@ export class ChatController {
   @ApiParam({ name: 'messageId', description: 'Message ID' })
   @ApiResponse({ status: 200, description: 'Message updated' })
   async editMessage(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Param('messageId') messageId: string,
     @Body() body: { content: string },
   ) {
@@ -478,7 +479,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Start a Deep Research task (background)' })
   @ApiResponse({ status: 202, description: 'Research started, returns id' })
   async startDeepResearch(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Body() body: { prompt: string; sessionId?: string; model?: string },
   ) {
     const { prompt, sessionId, model } = body || {};
@@ -505,7 +506,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Save Deep Research result to database' })
   @ApiResponse({ status: 200, description: 'Research messages saved' })
   async saveDeepResearchResult(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Body()
     body: { sessionId: string; userMessage: string; assistantMessage: string },
   ) {

@@ -8,10 +8,10 @@ export class CreatePaymentIntentDto {
 
 export class InitiatePaymentDto {
   @IsNumber()
-  userId: number;
+  userId!: number;
 
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsOptional()
   plan?: string;
@@ -19,9 +19,9 @@ export class InitiatePaymentDto {
 
 export class ActivateAccountDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
-  authority: string;
+  authority!: string;
 
   @IsOptional()
   password?: string;
@@ -29,5 +29,5 @@ export class ActivateAccountDto {
 
 export class ContinuePaymentDto {
   @IsEmail()
-  email: string;
+  email!: string;
 }

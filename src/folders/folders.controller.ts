@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { AuthenticatedRequest } from '../common/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FoldersService } from './folders.service';
 
@@ -18,17 +19,17 @@ export class FoldersController {
   constructor(private foldersService: FoldersService) {}
 
   @Get()
-  async getFolders(@Request() req) {
-    return this.foldersService.getUserFolders(req.user.userId);
+  async getFolders(@Request() req: AuthenticatedRequest) {
+    return this.foldersService.getUserFolders((req.user as any).userId);
   }
 
   @Post()
   async createFolder(
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Body() body: { name: string; color?: string; icon?: string },
   ) {
     return this.foldersService.createFolder(
-      req.user.userId,
+      (req.user as any).userId,
       body.name,
       body.color,
       body.icon,
@@ -37,24 +38,24 @@ export class FoldersController {
 
   @Put(':id')
   async updateFolder(
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Body() body: { name?: string; color?: string; icon?: string },
   ) {
     return this.foldersService.updateFolder(
       parseInt(id),
-      req.user.userId,
+      (req.user as any).userId,
       body,
     );
   }
 
   @Delete(':id')
-  async deleteFolder(@Request() req, @Param('id') id: string) {
-    return this.foldersService.deleteFolder(parseInt(id), req.user.userId);
+  async deleteFolder(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.foldersService.deleteFolder(parseInt(id), (req.user as any).userId);
   }
 
   @Get(':id/sessions')
-  async getFolderSessions(@Request() req, @Param('id') id: string) {
-    return this.foldersService.getFolderSessions(parseInt(id), req.user.userId);
+  async getFolderSessions(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.foldersService.getFolderSessions(parseInt(id), (req.user as any).userId);
   }
 }

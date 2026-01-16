@@ -7,6 +7,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { AuthenticatedRequest } from '../../common/types';
 import { DalleAdapter } from '../adapters/dalle.adapter';
 import { UsersService } from '../../users/users.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -20,7 +21,7 @@ export class ImageController {
 
   @Post('generate')
   @UseGuards(AuthGuard('jwt'))
-  async generateImage(@Req() req, @Body() body: { prompt: string }) {
+  async generateImage(@Req() req: AuthenticatedRequest, @Body() body: { prompt: string }) {
     const { prompt } = body;
     const userId = req.user.id;
 

@@ -38,7 +38,7 @@ export class AudioController {
   @UseInterceptors(
     FileInterceptor('audio', {
       limits: { fileSize: MAX_FILE_SIZE },
-      fileFilter: (req, file, cb) => {
+      fileFilter: (_req, file, cb) => {
         // Accept common audio formats
         const allowedExtensions = [
           'webm',

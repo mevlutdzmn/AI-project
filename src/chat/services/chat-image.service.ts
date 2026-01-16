@@ -22,6 +22,7 @@ import * as schema from '../../database/schema';
 import { messages, sessions } from '../../database/schema';
 import { eq, desc } from 'drizzle-orm';
 import { OpenAIAdapter } from '../../ai/adapters/openai.adapter';
+import { GeminiAdapter } from '../../ai/adapters/gemini.adapter';
 import { UsersService } from '../../users/users.service';
 import { StorageService } from '../../storage/storage.service';
 import {
@@ -34,6 +35,10 @@ interface ImageContext {
   responseId: string;
   imageCallId: string;
   revisedPrompt?: string;
+  // ✅ Gemini-specific fields
+  imageUrl?: string;
+  model?: string;
+  provider?: 'openai' | 'gemini';
 }
 
 @Injectable()
@@ -43,6 +48,7 @@ export class ChatImageService {
   constructor(
     @Inject(DRIZZLE) private db: PostgresJsDatabase<typeof schema>,
     private openai: OpenAIAdapter,
+    private gemini: GeminiAdapter,
     private usersService: UsersService,
     private storageService: StorageService, // ✅ Supabase Storage for Vercel
   ) {}
@@ -289,11 +295,36 @@ export class ChatImageService {
       for (const msg of recentMessages) {
         if (msg.role === 'assistant' && msg.imageContext) {
           const ctx = msg.imageContext as ImageContext;
+          
+          // ✅ OpenAI format: responseId + imageCallId
           if (ctx.responseId && ctx.imageCallId) {
             this.logger.log(
-              `[ImageContext] Found previous: responseId=${ctx.responseId}, callId=${ctx.imageCallId}`,
+              `[ImageContext] Found OpenAI context: responseId=${ctx.responseId}, callId=${ctx.imageCallId}`,
             );
             return ctx;
+          }
+          
+          // ✅ Gemini format: imageUrl + revisedPrompt (no responseId needed)
+          if (ctx.imageUrl || ctx.revisedPrompt) {
+            this.logger.log(
+              `[ImageContext] Found Gemini context: prompt="${ctx.revisedPrompt?.substring(0, 50)}..."`,
+            );
+            return ctx;
+          }
+        }
+        
+        // ✅ Also check if content has an image (fallback detection)
+        if (msg.role === 'assistant' && typeof msg.content === 'string') {
+          if (msg.content.includes('![Generated Image]') || msg.content.includes('![Gemini Image]')) {
+            this.logger.log(`[ImageContext] Found image in message content (fallback)`);
+            // Extract image URL from markdown
+            const urlMatch = msg.content.match(/!\[.*?\]\((.*?)\)/);
+            return {
+              responseId: '',
+              imageCallId: '',
+              imageUrl: urlMatch?.[1] || '',
+              revisedPrompt: 'previous image',
+            };
           }
         }
       }
@@ -550,27 +581,198 @@ export class ChatImageService {
     }
   }
 
+  // ============================================
+  // ✅ NEW: Handle Gemini Native Image Generation
+  // Supports: gemini-2.5-flash-image, gemini-3-pro-image-preview, imagen-4
+  // ============================================
+
+  async handleGeminiImageRequest(
+    sessionId: string,
+    prompt: string,
+    model: string,
+  ): Promise<{ content: string; assistantMessageId: number }> {
+    try {
+      const [session] = await this.db
+        .select({ userId: sessions.userId })
+        .from(sessions)
+        .where(eq(sessions.id, sessionId))
+        .limit(1);
+
+      if (!session) {
+        throw new Error('Session not found');
+      }
+
+      const user = await this.usersService.findById(session.userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const now = new Date();
+      const isPremium = user.isPremium || false;
+      const subscriptionEnd = user.subscriptionExpiresAt
+        ? new Date(user.subscriptionExpiresAt)
+        : null;
+      const isAdmin = user.isAdmin;
+      const imageCredits = user.imageCredits || 0;
+
+      const hasActivePremium =
+        isPremium && (!subscriptionEnd || subscriptionEnd > now);
+
+      // Check image limit for free users
+      if (!isAdmin && !hasActivePremium && imageCredits >= 1) {
+        const limitMsg =
+          '🚫 **Görsel oluşturma limitiniz doldu!**\n\n' +
+          'Ücretsiz hesaplar yalnızca **1 görsel** oluşturabilir.\n\n' +
+          '✨ Sınırsız görsel için **Premium**\'a yükseltin!';
+
+        const assistantMessageId = await this.saveAssistantMessage(sessionId, limitMsg, model);
+        return { content: limitMsg, assistantMessageId };
+      }
+
+      const finalPrompt = prompt.trim();
+      if (!finalPrompt) {
+        const errorMsg = '❌ Lütfen oluşturmak istediğiniz görseli açıklayın.';
+        const assistantMessageId = await this.saveAssistantMessage(sessionId, errorMsg, model);
+        return { content: errorMsg, assistantMessageId };
+      }
+
+      this.logger.log(`[GeminiImage] Generating with model: ${model}`);
+
+      let result: { imageData: string; mimeType: string; revisedPrompt?: string };
+
+      // Route to appropriate Gemini image API
+      if (model.startsWith('imagen')) {
+        // Imagen 4 API
+        const images = await this.gemini.generateImagenImage(finalPrompt, '1:1', 1);
+        if (images.length === 0) {
+          throw new Error('Imagen did not generate any images');
+        }
+        result = images[0];
+      } else {
+        // Nano Banana (gemini-2.5-flash-image, gemini-3-pro-image-preview)
+        result = await this.gemini.generateNanoBananaImage(finalPrompt, model);
+      }
+
+      // Determine file extension from mime type
+      const mimeType = result.mimeType || 'image/png';
+      const extension = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png';
+      const imageFileName = `gemini_${randomUUID()}.${extension}`;
+      const contentType = extension === 'png' ? 'image/png' : 'image/jpeg';
+      
+      let imageUrl: string;
+
+      if (this.storageService.isAvailable()) {
+        // ✅ Vercel: Use Supabase Storage
+        this.logger.log('[GeminiImage] Using Supabase Storage...');
+        imageUrl = await this.storageService.uploadImage(
+          result.imageData,
+          imageFileName,
+          contentType,
+        );
+        this.logger.log(`[GeminiImage] ✅ Uploaded to Supabase: ${imageUrl}`);
+      } else {
+        // Fallback: Local filesystem (development only)
+        this.logger.log('[GeminiImage] Using local filesystem...');
+        const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+        const imagePath = path.join(uploadsDir, imageFileName);
+        
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        const imageBuffer = Buffer.from(result.imageData, 'base64');
+        fs.writeFileSync(imagePath, imageBuffer);
+        
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+        imageUrl = `${backendUrl}/uploads/${imageFileName}`;
+        this.logger.log(`[GeminiImage] ✅ Saved locally: ${imagePath}`);
+      }
+
+      const imageResponse = `![Generated Image](${imageUrl})`;
+      
+      this.logger.log(`[GeminiImage] ✅ Gemini image generated successfully with ${model}`);
+
+      // Increment image credits for non-admin users
+      if (!isAdmin) {
+        await this.usersService.incrementImageCredits(session.userId);
+      }
+
+      // ✅ Save message WITH imageContext for edit follow-ups
+      const assistantMessageId = await this.saveAssistantMessage(sessionId, imageResponse, model, {
+        responseId: '',  // Gemini doesn't use responseId
+        imageCallId: '', // Gemini doesn't use imageCallId
+        imageUrl: imageUrl,
+        revisedPrompt: result.revisedPrompt || finalPrompt,
+        model: model,
+        provider: 'gemini',
+      });
+
+      return { content: imageResponse, assistantMessageId };
+    } catch (error: any) {
+      this.logger.error('[GeminiImage] Error:', error);
+      const errorMsg = this.getGeminiImageErrorMessage(error);
+      const assistantMessageId = await this.saveAssistantMessage(sessionId, errorMsg, model);
+      return { content: errorMsg, assistantMessageId };
+    }
+  }
+
+  /**
+   * Get user-friendly error message for Gemini image generation failures
+   */
+  private getGeminiImageErrorMessage(error: any): string {
+    const msg = error?.message || '';
+    
+    if (msg.includes('safety') || msg.includes('blocked')) {
+      return (
+        '⚠️ **Güvenlik Uyarısı**\n\n' +
+        'İsteğiniz Gemini güvenlik filtreleri tarafından reddedildi.\n\n' +
+        'Lütfen uygun ve saygılı ifadeler kullanın.'
+      );
+    }
+
+    if (msg.includes('not support') || msg.includes('Nano Banana')) {
+      return (
+        '❌ **Model Uyumsuzluğu**\n\n' +
+        'Bu Gemini modeli görsel oluşturmayı desteklemiyor.\n\n' +
+        '💡 Görsel için **Gemini Image** veya **GPT-5.2** modelini seçin.'
+      );
+    }
+
+    if (msg.includes('quota') || msg.includes('429')) {
+      return '⏳ Gemini API limiti aşıldı. Lütfen birkaç dakika bekleyin.';
+    }
+
+    if (msg.includes('API key')) {
+      return '❌ Gemini API yapılandırma hatası. Lütfen yöneticiyle iletişime geçin.';
+    }
+
+    return '❌ Gemini görsel oluşturma başarısız oldu. Lütfen tekrar deneyin veya farklı bir model seçin.';
+  }
+
   /**
    * Save assistant message with optional image context
+   * Returns the message ID for streaming completion
    */
   private async saveAssistantMessage(
     sessionId: string,
     content: string,
     model?: string,
     imageContext?: ImageContext,
-  ): Promise<void> {
-    await this.db.insert(messages).values({
+  ): Promise<number> {
+    const [insertedMsg] = await this.db.insert(messages).values({
       sessionId,
       role: 'assistant',
       content,
       model,
       imageContext: imageContext || null, // ✅ Store for multi-turn
-    });
+    }).returning({ id: messages.id });
 
     await this.db
       .update(sessions)
       .set({ updatedAt: new Date() })
       .where(eq(sessions.id, sessionId));
+    
+    return insertedMsg.id;
   }
 
   /**

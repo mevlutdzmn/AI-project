@@ -2,7 +2,6 @@ import {
   IsOptional,
   IsString,
   IsNotEmpty,
-  IsArray,
   ValidateNested,
   IsIn,
   ValidateIf,
@@ -15,7 +14,7 @@ import { Type, Transform } from 'class-transformer';
 class ImageUrlDto {
   @IsString()
   @IsNotEmpty()
-  url: string;
+  url!: string;
 }
 
 /**
@@ -25,7 +24,7 @@ class ImageUrlDto {
 class MessagePartDto {
   @IsString()
   @IsIn(['text', 'image_url'])
-  type: 'text' | 'image_url';
+  type!: 'text' | 'image_url';
 
   @ValidateIf((o) => o.type === 'text')
   @IsString()
@@ -44,7 +43,7 @@ class MessagePartDto {
 export class SendMessageDto {
   @IsString()
   @IsNotEmpty()
-  sessionId: string;
+  sessionId!: string;
 
   /**
    * Message content - can be:
@@ -62,7 +61,7 @@ export class SendMessageDto {
   @ValidateIf((o) => typeof o.message === 'string')
   @IsString()
   @IsNotEmpty()
-  message: string | MessagePartDto[];
+  message!: string | MessagePartDto[];
 
   @IsOptional()
   @IsString()

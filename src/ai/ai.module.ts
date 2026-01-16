@@ -11,9 +11,11 @@
 
 import { Module } from '@nestjs/common';
 import { OpenAIAdapter } from './adapters/openai.adapter';
+import { GeminiAdapter } from './adapters/gemini.adapter';
 import { DalleAdapter } from './adapters/dalle.adapter';
 import { SearchAdapter } from './adapters/search.adapter';
 import { DeepResearchAdapter } from './adapters/deep-research.adapter';
+import { AdapterFactory } from './factories/adapter.factory';
 import { UsersModule } from '../users/users.module';
 import { ImageGenerationTool } from './tools/image-generation.tool';
 import { WebSearchTool } from './tools/web-search.tool';
@@ -27,10 +29,14 @@ import { AI_TOKENS } from './interfaces';
   providers: [
     // Concrete implementations
     OpenAIAdapter,
+    GeminiAdapter,
     DalleAdapter,
     SearchAdapter,
     DeepResearchAdapter,
-    
+
+    // Adapter Factory (routes to appropriate provider)
+    AdapterFactory,
+
     // Dependency Inversion: Token-based providers
     // Allows swapping implementations without changing consumers
     {
@@ -60,10 +66,14 @@ import { AI_TOKENS } from './interfaces';
   exports: [
     // Export both concrete and abstract tokens
     OpenAIAdapter,
+    GeminiAdapter,
     DalleAdapter,
     SearchAdapter,
     DeepResearchAdapter,
-    
+
+    // Adapter Factory
+    AdapterFactory,
+
     // Token exports for DIP
     AI_TOKENS.CHAT_ADAPTER,
     AI_TOKENS.IMAGE_ADAPTER,

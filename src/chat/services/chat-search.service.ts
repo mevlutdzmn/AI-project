@@ -312,7 +312,7 @@ export class ChatSearchService {
   /**
    * Get recent searches for autocomplete (optional feature)
    */
-  async getRecentSearches(userId: number, limit: number = 5): Promise<string[]> {
+  async getRecentSearches(userId: number, _limit: number = 5): Promise<string[]> {
     // This could be stored in a separate table or Redis
     // For now, return empty array
     return [];

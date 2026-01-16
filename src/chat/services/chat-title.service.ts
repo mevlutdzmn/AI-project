@@ -115,7 +115,7 @@ export class ChatTitleService {
       const title = await this.generateTitleWithAI(conversationText);
       return { title: title || 'گفتگوی جدید' };
     } catch (error) {
-      this.logger.error('[generateChatTitle] Error:', error.message);
+      this.logger.error('[generateChatTitle] Error:', (error as Error).message);
       return { title: 'گفتگوی جدید' };
     }
   }
@@ -152,7 +152,7 @@ User message: "${userMessage.substring(0, 200)}"`;
 
       return title;
     } catch (error) {
-      this.logger.error('[generateTitleWithAI] Error:', error.message);
+      this.logger.error('[generateTitleWithAI] Error:', (error as Error).message);
       return '';
     }
   }

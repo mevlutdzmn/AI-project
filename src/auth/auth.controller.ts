@@ -12,6 +12,7 @@ import {
   Headers,
   Ip,
 } from '@nestjs/common';
+import { AuthenticatedRequest } from '../common/types';
 import {
   ApiTags,
   ApiOperation,
@@ -71,7 +72,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout user' })
   @ApiResponse({ status: 200, description: 'Logged out' })
   async logout(
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Body('refreshToken') refreshToken?: string,
   ) {
     await this.authService.logout(req.user.id, refreshToken);
@@ -83,7 +84,7 @@ export class AuthController {
   @Get('sessions')
   @ApiOperation({ summary: 'Get active sessions' })
   @ApiResponse({ status: 200, description: 'Active sessions list' })
-  async getActiveSessions(@Request() req) {
+  async getActiveSessions(@Request() req: AuthenticatedRequest) {
     return this.authService.getActiveSessions(req.user.id);
   }
 
@@ -93,7 +94,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke a specific session' })
   @ApiResponse({ status: 200, description: 'Session revoked' })
   async revokeSession(
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Param('sessionId') sessionId: string,
   ) {
     await this.authService.revokeSession(req.user.id, parseInt(sessionId, 10));
@@ -104,7 +105,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Request password reset' })
   @ApiResponse({ status: 200, description: 'Reset email sent if user exists' })
   async forgotPassword(@Body() body: ForgotPasswordDto) {
-    return this.authService.forgotPassword(body.email);
+    return this.authService.forgotPassword(body.email, body.locale);
   }
 
   @Post('reset-password')
@@ -138,7 +139,7 @@ export class AuthController {
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'User profile' })
-  getProfile(@Request() req) {
+  getProfile(@Request() req: AuthenticatedRequest) {
     // ✅ Hassas bilgileri çıkar ve isPremium'u düzgün döndür
     const {
       password,
@@ -146,7 +147,7 @@ export class AuthController {
       resetToken,
       resetTokenExpiry,
       ...safeUser
-    } = req.user;
+    } = req.user as any;
     return {
       ...safeUser,
       isPremium: req.user.isPremium ?? false,
@@ -164,7 +165,7 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Google OAuth callback' })
-  async googleAuthRedirect(@Req() req, @Res() res: Response) {
+  async googleAuthRedirect(@Req() req: AuthenticatedRequest, @Res() res: Response) {
     const user = req.user;
     const token = await this.authService.handleGoogleLogin(user);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';

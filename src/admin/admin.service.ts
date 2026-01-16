@@ -110,7 +110,7 @@ export class AdminService {
   }
 
   async createUser(data: CreateUserDto) {
-    const { email, password, isAdmin = false, active = true, isPremium = false, premiumDays = 30 } = data;
+    const { email, password, isAdmin = false, active = true, isPremium: _isPremium = false, premiumDays: _premiumDays = 30 } = data;
     
     this.logger.log(`Creating user: ${email}`);
 

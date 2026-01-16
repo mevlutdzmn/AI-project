@@ -19,6 +19,7 @@ import {
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
 import * as bcrypt from 'bcrypt';
+import { AuthenticatedRequest } from '../common/types';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -30,7 +31,7 @@ export class UsersController {
   @Get('profile')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'Returns user profile' })
-  async getProfile(@Req() req) {
+  async getProfile(@Req() req: AuthenticatedRequest) {
     return this.usersService.updateProfile(req.user.id);
   }
 
@@ -39,7 +40,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Update user profile' })
   @ApiResponse({ status: 200, description: 'Profile updated' })
   async updateProfile(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Body() body: { name?: string; email?: string },
   ) {
     const updatedUser = await this.usersService.updateUserProfile(
@@ -54,7 +55,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Change user password' })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   async changePassword(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Body() body: { currentPassword: string; newPassword: string },
   ) {
     const { currentPassword, newPassword } = body;
@@ -93,7 +94,7 @@ export class UsersController {
   @Delete('delete-account')
   @ApiOperation({ summary: 'Delete user account' })
   @ApiResponse({ status: 200, description: 'Account deleted successfully' })
-  async deleteAccount(@Req() req) {
+  async deleteAccount(@Req() req: AuthenticatedRequest) {
     await this.usersService.deleteUser(req.user.id);
     return { success: true, message: 'حساب کاربری با موفقیت حذف شد' };
   }

@@ -20,7 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Response, Request } from 'express';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { PaymentsService } from './payments.service';
 import { ZarinpalAdapter } from './zarinpal.adapter';
@@ -28,6 +28,7 @@ import { EmailService } from '../notifications/email.service';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE } from '../database/drizzle.provider';
 import { users, pending_users } from '../database/schema';
+import { AuthenticatedRequest } from '../common/types';
 import * as schema from '../database/schema';
 
 @ApiTags('Payments')
@@ -48,7 +49,7 @@ export class PaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create Stripe payment intent' })
   @ApiResponse({ status: 201, description: 'Payment intent created' })
-  async createPaymentIntent(@Req() req, @Body() body: { amount?: number }) {
+  async createPaymentIntent(@Req() req: AuthenticatedRequest, @Body() body: { amount?: number }) {
     return this.paymentsService.createPaymentIntent(
       req.user.id,
       req.user.email,
@@ -59,7 +60,7 @@ export class PaymentsController {
   @Post('webhook')
   @ApiOperation({ summary: 'Stripe webhook handler' })
   @ApiResponse({ status: 200, description: 'Webhook processed' })
-  async handleWebhook(@Req() req, @Res() res: Response) {
+  async handleWebhook(@Req() req: Request, @Res() res: Response) {
     const signature = req.headers['stripe-signature'];
     if (!signature) {
       return res
@@ -70,7 +71,7 @@ export class PaymentsController {
     try {
       await this.paymentsService.handleWebhook(
         signature as string,
-        req.rawBody || req.body,
+        (req as any).rawBody || req.body,
       );
       return res.send({ received: true });
     } catch (err: unknown) {
@@ -87,7 +88,7 @@ export class PaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Check user subscription status' })
   @ApiResponse({ status: 200, description: 'Returns subscription status' })
-  async getStatus(@Req() req) {
+  async getStatus(@Req() req: AuthenticatedRequest) {
     const user = await this.db.query.users.findFirst({
       where: eq(users.id, req.user.id),
       columns: {
@@ -356,7 +357,7 @@ export class PaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Renew subscription' })
   @ApiResponse({ status: 201, description: 'Renewal initiated' })
-  async renewSubscription(@Req() req) {
+  async renewSubscription(@Req() req: AuthenticatedRequest) {
     const userId = req.user.id;
     const [user] = await this.db
       .select()
