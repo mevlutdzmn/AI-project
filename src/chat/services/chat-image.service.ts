@@ -244,10 +244,16 @@ export class ChatImageService {
       // Turkish edit patterns
       const turkishEditPatterns = [
         /olsun$/i,           // "...olsun" (let it be)
+        /olmasın$/i,         // "...olmasın" (let it not be) - e.g. "arka planı olmasın"
         /yap$/i,             // "...yap" (make it)
+        /yapma$/i,           // "...yapma" (don't make)
         /koy$/i,             // "...koy" (put it)
+        /koyma$/i,           // "...koyma" (don't put)
         /ekle$/i,            // "...ekle" (add)
+        /ekleme$/i,          // "...ekleme" (don't add)
         /çıkar$/i,           // "...çıkar" (remove)
+        /kaldır$/i,          // "...kaldır" (remove)
+        /sil$/i,             // "...sil" (delete)
         /değiştir$/i,        // "...değiştir" (change)
         /üstünde/i,          // "...üstünde" (on top of)
         /üzerinde/i,         // "...üzerinde" (on)
@@ -258,6 +264,10 @@ export class ChatImageService {
         /önünde/i,           // "...önünde" (in front of)
         /elinde/i,           // "...elinde" (in hand)
         /elinin/i,           // "...elinin" (of hand)
+        /olmadan/i,          // "...olmadan" (without)
+        /planı/i,            // "arka planı" (background)
+        /rengini/i,          // "...rengini" (its color)
+        /boyutunu/i,         // "...boyutunu" (its size)
       ];
       
       for (const pattern of turkishEditPatterns) {
