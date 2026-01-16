@@ -406,14 +406,29 @@ export class ChatService {
     if (mode === 'image') {
       // Detect format from prompt - default to jpg unless PNG explicitly requested
       const explicitFormat = messageText?.toLowerCase().includes('png') ? 'png' : 'jpg';
-      const imageResponse = await this.imageService.handleImageRequest(
-        sessionId,
-        messageText || 'Generate an image',
-        model,
-        false,
-        undefined,
-        explicitFormat,
-      );
+      
+      // ✅ Route to correct image service based on model
+      const isGeminiModel = model?.startsWith('gemini') || model?.startsWith('imagen');
+      
+      let imageResponse: string;
+      if (isGeminiModel) {
+        this.logger.log(`[Image Mode] Using Gemini image generation with model: ${model}`);
+        imageResponse = await this.imageService.handleGeminiImageRequest(
+          sessionId,
+          messageText || 'Generate an image',
+          model,
+        );
+      } else {
+        this.logger.log(`[Image Mode] Using OpenAI image generation with model: ${model}`);
+        imageResponse = await this.imageService.handleImageRequest(
+          sessionId,
+          messageText || 'Generate an image',
+          model,
+          false,
+          undefined,
+          explicitFormat,
+        );
+      }
       return { response: imageResponse, userMessageId: userMsg.id };
     }
 
