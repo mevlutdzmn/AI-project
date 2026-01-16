@@ -736,19 +736,17 @@ export class ChatService {
         return { sessionId, userMessageId: userMsg.id, assistantMessageId: imageResult.assistantMessageId };
       }
       
-      // Edit request (has recent image + edit keywords like "daha gerçekçi olsun")
+      // ✅ Edit request - Use Gemini's native image editing (keeps same subject!)
+      // We now have editNanoBananaImage that sends previous image to Gemini
       if (hasRecentImageInSession && isEditRequest) {
-        this.logger.log(`[SendMessageStream] Gemini CHAT model - edit request detected → using Gemini Image`);
-        // Get the previous image prompt and combine with edit request
-        const previousContext = await this.imageService.findPreviousImageContext(sessionId);
-        const editPrompt = previousContext?.revisedPrompt 
-          ? `${previousContext.revisedPrompt}. Now make it: ${messageText}`
-          : messageText || 'Edit the image';
+        this.logger.log(`[SendMessageStream] Gemini EDIT request → using Gemini native image editing`);
         
+        // handleGeminiImageRequest now automatically detects edit requests
+        // and downloads the previous image to send to Gemini
         const imageResult = await this.imageService.handleGeminiImageRequest(
           sessionId,
-          editPrompt,
-          'gemini-2.0-flash-exp',
+          messageText || 'Edit the image',
+          'gemini-2.0-flash-exp', // Use Gemini's native image model
         );
         onChunk(imageResult.content);
         return { sessionId, userMessageId: userMsg.id, assistantMessageId: imageResult.assistantMessageId };

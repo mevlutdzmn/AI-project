@@ -54,6 +54,34 @@ export class ChatImageService {
   ) {}
 
   // ============================================
+  // ✅ Helper: Download image URL to Base64
+  // ============================================
+
+  /**
+   * Download an image from URL and convert to base64
+   * Used for Gemini image editing (requires previous image)
+   */
+  private async downloadImageAsBase64(imageUrl: string): Promise<string> {
+    try {
+      this.logger.log(`[DownloadImage] Fetching: ${imageUrl}`);
+      
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      
+      this.logger.log(`[DownloadImage] ✅ Downloaded ${arrayBuffer.byteLength} bytes`);
+      return base64;
+    } catch (error) {
+      this.logger.error(`[DownloadImage] ❌ Failed to download: ${error}`);
+      throw error;
+    }
+  }
+
+  // ============================================
   // ✅ NEW: Function Calling Handler
   // ============================================
 
@@ -650,17 +678,46 @@ export class ChatImageService {
 
       let result: { imageData: string; mimeType: string; revisedPrompt?: string };
 
-      // Route to appropriate Gemini image API
-      if (model.startsWith('imagen')) {
-        // Imagen 4 API
-        const images = await this.gemini.generateImagenImage(finalPrompt, '1:1', 1);
-        if (images.length === 0) {
-          throw new Error('Imagen did not generate any images');
+      // ✅ Check if this is an EDIT request (has previous image)
+      const previousContext = await this.findPreviousImageContext(sessionId);
+      const isEditRequest = this.isImageEditRequest(finalPrompt);
+      
+      if (isEditRequest && previousContext?.imageUrl) {
+        // ✅ EDIT MODE: Download previous image and send to Gemini for editing
+        this.logger.log(`[GeminiImage] 🔄 EDIT MODE - Previous image: ${previousContext.imageUrl}`);
+        
+        try {
+          // Download previous image from Supabase
+          const previousImageBase64 = await this.downloadImageAsBase64(previousContext.imageUrl);
+          const mimeType = previousContext.imageUrl.includes('.jpg') || previousContext.imageUrl.includes('.jpeg') 
+            ? 'image/jpeg' 
+            : 'image/png';
+          
+          this.logger.log(`[GeminiImage] ✅ Downloaded previous image (${mimeType}), sending for edit...`);
+          
+          // Use Gemini native editing (keeps same subject!)
+          result = await this.gemini.editNanoBananaImage(finalPrompt, previousImageBase64, mimeType);
+          
+          this.logger.log(`[GeminiImage] ✅ Gemini edit completed successfully`);
+        } catch (downloadError) {
+          this.logger.warn(`[GeminiImage] ⚠️ Failed to download previous image, falling back to new generation: ${downloadError}`);
+          // Fallback to new generation if download fails
+          result = await this.gemini.generateNanoBananaImage(finalPrompt, model);
         }
-        result = images[0];
       } else {
-        // Nano Banana (gemini-2.5-flash-image, gemini-3-pro-image-preview)
-        result = await this.gemini.generateNanoBananaImage(finalPrompt, model);
+        // ✅ NEW IMAGE: Normal generation flow
+        // Route to appropriate Gemini image API
+        if (model.startsWith('imagen')) {
+          // Imagen 4 API
+          const images = await this.gemini.generateImagenImage(finalPrompt, '1:1', 1);
+          if (images.length === 0) {
+            throw new Error('Imagen did not generate any images');
+          }
+          result = images[0];
+        } else {
+          // Nano Banana (gemini-2.5-flash-image, gemini-3-pro-image-preview)
+          result = await this.gemini.generateNanoBananaImage(finalPrompt, model);
+        }
       }
 
       // Determine file extension from mime type

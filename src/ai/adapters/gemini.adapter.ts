@@ -592,6 +592,67 @@ export class GeminiAdapter {
   }
 
   // ============================================
+  // ✅ Gemini Image EDITING - sends previous image + edit prompt
+  // ============================================
+  async editNanoBananaImage(
+    editPrompt: string,
+    previousImageBase64: string,
+    previousImageMimeType: string = 'image/png',
+  ): Promise<{ imageData: string; mimeType: string; revisedPrompt?: string }> {
+    if (!this.client) {
+      throw new Error('Gemini API key not configured');
+    }
+
+    const imageModel = 'gemini-2.0-flash-exp';
+    this.logger.log(`[Gemini] Editing image with model: ${imageModel}`);
+
+    try {
+      // ✅ Send previous image + edit instruction
+      const response = await this.client.models.generateContent({
+        model: imageModel,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  mimeType: previousImageMimeType,
+                  data: previousImageBase64,
+                },
+              },
+              {
+                text: `Edit this image: ${editPrompt}. Keep the main subject exactly the same, only apply the requested changes.`,
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['Image', 'Text'],
+        },
+      });
+
+      const candidate = response.candidates?.[0];
+      const imagePart = candidate?.content?.parts?.find(
+        (p: any) => p.inlineData?.mimeType?.startsWith('image/'),
+      );
+
+      if (imagePart?.inlineData) {
+        this.logger.log(`[Gemini] ✅ Image edited successfully`);
+        return {
+          imageData: imagePart.inlineData.data || '',
+          mimeType: imagePart.inlineData.mimeType || 'image/png',
+          revisedPrompt: response.text || editPrompt,
+        };
+      }
+
+      throw new Error('Gemini did not return an edited image');
+    } catch (error: any) {
+      this.logger.error(`[Gemini] Image edit error: ${error.message}`);
+      throw new Error(`AI Provider Error (Gemini Edit): ${error.message}`);
+    }
+  }
+
+  // ============================================
   // Imagen Image Generation (imagen-3.0-generate-002)
   // ============================================
 
