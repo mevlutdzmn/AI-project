@@ -23,9 +23,11 @@ import { DeepResearchTool } from './tools/deep-research.tool';
 import { CodeInterpreterTool } from './tools/code-interpreter.tool';
 import { CanvasTool } from './tools/canvas.tool';
 import { AI_TOKENS } from './interfaces';
+import { ModelsController } from './controllers/models.controller';
 
 @Module({
   imports: [UsersModule],
+  controllers: [ModelsController],
   providers: [
     // Concrete implementations
     OpenAIAdapter,
