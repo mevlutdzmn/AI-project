@@ -680,7 +680,7 @@ export class ChatImageService {
 
       // ✅ Check if this is an EDIT request (has previous image)
       const previousContext = await this.findPreviousImageContext(sessionId);
-      const isEditRequest = this.isImageEditRequest(finalPrompt);
+      const isEditRequest = this.isImageEditFollowUp(finalPrompt);
       
       if (isEditRequest && previousContext?.imageUrl) {
         // ✅ EDIT MODE: Download previous image and send to Gemini for editing
