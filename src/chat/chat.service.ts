@@ -413,11 +413,12 @@ export class ChatService {
       let imageResponse: string;
       if (isGeminiModel) {
         this.logger.log(`[Image Mode] Using Gemini image generation with model: ${model}`);
-        imageResponse = await this.imageService.handleGeminiImageRequest(
+        const geminiResult = await this.imageService.handleGeminiImageRequest(
           sessionId,
           messageText || 'Generate an image',
           model,
         );
+        imageResponse = geminiResult.content;
       } else {
         this.logger.log(`[Image Mode] Using OpenAI image generation with model: ${model}`);
         imageResponse = await this.imageService.handleImageRequest(
