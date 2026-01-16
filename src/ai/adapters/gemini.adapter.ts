@@ -531,8 +531,25 @@ export class GeminiAdapter {
     this.logger.log(`[Gemini] Generating native image with model: ${imageModel}`);
 
     try {
+      // ✅ Detect transparent/PNG/no background requests
+      const lowerPrompt = prompt.toLowerCase();
+      const wantsTransparent = lowerPrompt.includes('transparent') || 
+        lowerPrompt.includes('png') ||
+        lowerPrompt.includes('arka plan') ||
+        lowerPrompt.includes('arkaplan') ||
+        lowerPrompt.includes('background') ||
+        lowerPrompt.includes('cutout') ||
+        lowerPrompt.includes('olmasın') ||
+        lowerPrompt.includes('kaldır') ||
+        lowerPrompt.includes('olmadan');
+      
       // Enhance prompt for better image quality
-      const enhancedPrompt = `Create a high-quality, detailed image: ${prompt}. Make it visually stunning and professional.`;
+      let enhancedPrompt: string;
+      if (wantsTransparent) {
+        enhancedPrompt = `Create a PNG image with TRANSPARENT background, NO background at all, just the subject isolated on a transparent/alpha channel background: ${prompt}. The subject should be clearly cut out with no background elements.`;
+      } else {
+        enhancedPrompt = `Create a high-quality, detailed image: ${prompt}. Make it visually stunning and professional.`;
+      }
 
       const response = await this.client.models.generateContent({
         model: imageModel,
